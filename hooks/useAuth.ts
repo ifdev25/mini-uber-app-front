@@ -1,0 +1,139 @@
+/**
+ * Hook personnalisé pour gérer l'authentification
+ * Utilise React Query pour la gestion du cache et des états
+ */
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+import { User, RegisterData } from '@/lib/types';
+import { ROUTES, STORAGE_KEYS } from '@/lib/constants';
+
+export function useAuth() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  /**
+   * Récupérer l'utilisateur connecté
+   */
+  const {
+    data: user,
+    isLoading: isLoadingUser,
+    error: userError,
+  } = useQuery<User | null>({
+    queryKey: ['auth', 'user'],
+    queryFn: async () => {
+      const token = api.getToken();
+      if (!token) {
+        return null;
+      }
+
+      try {
+        return await api.getMe();
+      } catch (error) {
+        // Si le token est invalide ou le backend indisponible, le nettoyer
+        api.clearToken();
+        return null;
+      }
+    },
+    retry: false,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    // Ne pas attendre indéfiniment si le backend est down
+    gcTime: 0,
+  });
+
+  /**
+   * Mutation de connexion
+   */
+  const loginMutation = useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const response = await api.login(email, password);
+      return response;
+    },
+    onSuccess: async () => {
+      // Récupérer et mettre en cache l'utilisateur
+      const user = await api.getMe();
+      queryClient.setQueryData(['auth', 'user'], user);
+
+      // Stocker les données utilisateur dans localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      }
+
+      // Rediriger selon le type d'utilisateur
+      if (user.usertype === 'driver') {
+        router.push(ROUTES.DASHBOARD);
+      } else {
+        router.push(ROUTES.HOME);
+      }
+    },
+  });
+
+  /**
+   * Mutation d'inscription
+   */
+  const registerMutation = useMutation({
+    mutationFn: async (data: RegisterData) => {
+      return await api.register(data);
+    },
+    onSuccess: async (response) => {
+      // Le backend gère maintenant l'envoi de l'email de vérification
+      // La réponse contient le user avec isVerified: false
+      // On ne redirige plus automatiquement pour permettre d'afficher le message de succès
+    },
+  });
+
+  /**
+   * Fonction de déconnexion
+   */
+  const logout = () => {
+    api.clearToken();
+    queryClient.setQueryData(['auth', 'user'], null);
+    queryClient.clear();
+    router.push(ROUTES.LOGIN);
+  };
+
+  /**
+   * Vérifier si l'utilisateur est authentifié
+   */
+  const isAuthenticated = !!user && !!api.getToken();
+
+  /**
+   * Vérifier si l'utilisateur est un chauffeur
+   */
+  const isDriver = user?.usertype === 'driver';
+
+  /**
+   * Vérifier si l'utilisateur est un passager
+   */
+  const isPassenger = user?.usertype === 'passenger';
+
+  /**
+   * Vérifier si l'utilisateur est un admin
+   */
+  const isAdmin = user?.usertype === 'admin';
+
+  return {
+    // État de l'utilisateur
+    user,
+    isLoadingUser,
+    userError,
+    isAuthenticated,
+    isDriver,
+    isPassenger,
+    isAdmin,
+
+    // Actions
+    login: loginMutation.mutate,
+    register: registerMutation.mutate,
+    logout,
+
+    // États des mutations
+    isLoggingIn: loginMutation.isPending,
+    loginError: loginMutation.error,
+    isRegistering: registerMutation.isPending,
+    registerError: registerMutation.error,
+    registerData: registerMutation.data, // Données de la réponse d'inscription
+    registerSuccess: registerMutation.isSuccess, // Indicateur de succès
+  };
+}

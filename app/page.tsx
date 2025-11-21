@@ -1,65 +1,191 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ROUTES } from '@/lib/constants';
 
 export default function Home() {
+  const router = useRouter();
+  const { isAuthenticated, isLoadingUser } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  // S'assurer que le composant est monté côté client
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Rediriger les utilisateurs connectés vers le dashboard
+    if (isMounted && !isLoadingUser && isAuthenticated) {
+      router.push(ROUTES.DASHBOARD);
+    }
+  }, [isMounted, isAuthenticated, isLoadingUser, router]);
+
+  // Afficher un loader pendant le montage initial uniquement
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      {/* Bandeau d'avertissement si le backend n'est pas disponible */}
+      {isMounted && isLoadingUser && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-3">
+          <div className="max-w-7xl mx-auto">
+            <p className="text-sm text-yellow-800 text-center">
+              ⚠️ Impossible de se connecter au backend API. Les fonctionnalités de connexion seront limitées.
+              <br />
+              <span className="text-xs">Vérifiez que le backend tourne sur http://localhost:8000</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-16">
+          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+            Mini Uber
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-gray-600">
+            Votre service de transport simple et fiable
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">
+          <Card className="border-2 hover:border-blue-300 transition-all">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <span className="text-4xl">👤</span>
+                Je suis passager
+              </CardTitle>
+              <CardDescription className="text-base">
+                Réservez une course en quelques clics
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ul className="space-y-2 text-gray-600">
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Réservation instantanée
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Suivi en temps réel
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Prix transparents
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Chauffeurs vérifiés
+                </li>
+              </ul>
+              <Link href={ROUTES.REGISTER} className="block">
+                <Button className="w-full" size="lg">
+                  Commencer maintenant
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 hover:border-green-300 transition-all">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <span className="text-4xl">🚗</span>
+                Je suis chauffeur
+              </CardTitle>
+              <CardDescription className="text-base">
+                Gagnez de l'argent en conduisant
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ul className="space-y-2 text-gray-600">
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Horaires flexibles
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Paiements sécurisés
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Tableau de bord complet
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-green-600">✓</span>
+                  Support 24/7
+                </li>
+              </ul>
+              <Link href={ROUTES.REGISTER} className="block">
+                <Button className="w-full" size="lg" variant="outline">
+                  Devenir chauffeur
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         </div>
-      </main>
+
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Vous avez déjà un compte ?</p>
+          <Link href={ROUTES.LOGIN}>
+            <Button size="lg" variant="outline">
+              Se connecter
+            </Button>
+          </Link>
+        </div>
+
+        <div className="mt-16 text-center">
+          <Card className="max-w-2xl mx-auto bg-blue-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-blue-900">Comment ça marche ?</CardTitle>
+            </CardHeader>
+            <CardContent className="text-left">
+              <div className="space-y-4">
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Inscrivez-vous</h4>
+                    <p className="text-gray-600">Créez votre compte en quelques secondes</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Réservez ou conduisez</h4>
+                    <p className="text-gray-600">Demandez une course ou acceptez des passagers</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Profitez !</h4>
+                    <p className="text-gray-600">Suivez votre course en temps réel</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

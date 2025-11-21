@@ -23,6 +23,7 @@ export interface User {
   profilePictureUrl?: string | null;
   createdAt: string;
   driver?: Driver | null;
+  isVerified?: boolean; // Email verification status
 }
 
 // ============================================

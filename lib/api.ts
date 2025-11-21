@@ -72,8 +72,20 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Déterminer le Content-Type approprié
+    // API Platform utilise application/ld+json par défaut
+    // Sauf pour les endpoints custom comme /api/login
+    const isApiPlatformEndpoint = !endpoint.includes('/login') &&
+                                    !endpoint.includes('/ride-estimates') &&
+                                    !endpoint.includes('/accept') &&
+                                    !endpoint.includes('/status') &&
+                                    !endpoint.includes('/location') &&
+                                    !endpoint.includes('/availability');
+
+    const defaultContentType = isApiPlatformEndpoint ? 'application/ld+json' : 'application/json';
+
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      'Content-Type': defaultContentType,
       ...options.headers,
     };
 
