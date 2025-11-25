@@ -291,7 +291,7 @@ npm run lint       # Linter ESLint
 
 ## 🤝 Contributeurs
 
-- **Votre Nom** - Développeur principal
+- **IFWEBDEV** - Développeur principal
 
 ---
 
@@ -314,7 +314,6 @@ Si vous rencontrez un problème, veuillez créer une issue sur GitHub avec :
 ## 💡 Support
 
 Pour toute question ou suggestion :
-- 📧 Email : votre-email@example.com
 - 💬 GitHub Issues : [Issues](https://github.com/votre-username/mini-uber-app-front/issues)
 
 ---
