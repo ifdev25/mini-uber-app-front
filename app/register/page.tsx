@@ -18,10 +18,10 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    firstname: '',
-    lastname: '',
+    firstName: '',
+    lastName: '',
     phone: '',
-    usertype: 'passenger' as UserType,
+    userType: 'passenger' as UserType,
   });
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -69,12 +69,12 @@ export default function RegisterPage() {
       errors.confirmPassword = 'Les mots de passe ne correspondent pas';
     }
 
-    if (!formData.firstname) {
-      errors.firstname = 'Le prénom est requis';
+    if (!formData.firstName) {
+      errors.firstName = 'Le prénom est requis';
     }
 
-    if (!formData.lastname) {
-      errors.lastname = 'Le nom est requis';
+    if (!formData.lastName) {
+      errors.lastName = 'Le nom est requis';
     }
 
     if (!formData.phone) {
@@ -139,32 +139,32 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="firstname">Prénom</Label>
+                <Label htmlFor="firstName">Prénom</Label>
                 <Input
-                  id="firstname"
+                  id="firstName"
                   type="text"
                   placeholder="John"
-                  value={formData.firstname}
-                  onChange={(e) => handleChange('firstname', e.target.value)}
+                  value={formData.firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value)}
                   disabled={isRegistering}
                 />
-                {validationErrors.firstname && (
-                  <p className="text-xs text-red-600">{validationErrors.firstname}</p>
+                {validationErrors.firstName && (
+                  <p className="text-xs text-red-600">{validationErrors.firstName}</p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="lastname">Nom</Label>
+                <Label htmlFor="lastName">Nom</Label>
                 <Input
-                  id="lastname"
+                  id="lastName"
                   type="text"
                   placeholder="Doe"
-                  value={formData.lastname}
-                  onChange={(e) => handleChange('lastname', e.target.value)}
+                  value={formData.lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value)}
                   disabled={isRegistering}
                 />
-                {validationErrors.lastname && (
-                  <p className="text-xs text-red-600">{validationErrors.lastname}</p>
+                {validationErrors.lastName && (
+                  <p className="text-xs text-red-600">{validationErrors.lastName}</p>
                 )}
               </div>
             </div>
@@ -200,10 +200,10 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="usertype">Type de compte</Label>
+              <Label htmlFor="userType">Type de compte</Label>
               <Select
-                value={formData.usertype}
-                onValueChange={(value) => handleChange('usertype', value)}
+                value={formData.userType}
+                onValueChange={(value) => handleChange('userType', value)}
                 disabled={isRegistering}
               >
                 <SelectTrigger>

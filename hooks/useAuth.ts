@@ -20,6 +20,7 @@ export function useAuth() {
     data: user,
     isLoading: isLoadingUser,
     error: userError,
+    refetch,
   } = useQuery<User | null>({
     queryKey: ['auth', 'user'],
     queryFn: async () => {
@@ -29,7 +30,9 @@ export function useAuth() {
       }
 
       try {
-        return await api.getMe();
+        const userData = await api.getMe();
+        console.log('🔍 Données utilisateur reçues de l\'API:', userData);
+        return userData;
       } catch (error) {
         // Si le token est invalide ou le backend indisponible, le nettoyer
         api.clearToken();
@@ -61,7 +64,7 @@ export function useAuth() {
       }
 
       // Rediriger selon le type d'utilisateur
-      if (user.usertype === 'driver') {
+      if (user.userType === 'driver') {
         router.push(ROUTES.DASHBOARD);
       } else {
         router.push(ROUTES.HOME);
@@ -101,17 +104,17 @@ export function useAuth() {
   /**
    * Vérifier si l'utilisateur est un chauffeur
    */
-  const isDriver = user?.usertype === 'driver';
+  const isDriver = user?.userType === 'driver';
 
   /**
    * Vérifier si l'utilisateur est un passager
    */
-  const isPassenger = user?.usertype === 'passenger';
+  const isPassenger = user?.userType === 'passenger';
 
   /**
    * Vérifier si l'utilisateur est un admin
    */
-  const isAdmin = user?.usertype === 'admin';
+  const isAdmin = user?.userType === 'admin';
 
   return {
     // État de l'utilisateur
@@ -127,6 +130,7 @@ export function useAuth() {
     login: loginMutation.mutate,
     register: registerMutation.mutate,
     logout,
+    refetch,
 
     // États des mutations
     isLoggingIn: loginMutation.isPending,

@@ -48,7 +48,7 @@ export default function TestApiPage() {
 
       // Récupérer le profil
       const user = await api.getMe();
-      setResult(prev => prev + `\n✅ Profil récupéré: ${user.firstname} ${user.lastname} (${user.usertype})`);
+      setResult(prev => prev + `\n✅ Profil récupéré: ${user.firstName} ${user.lastName} (${user.userType})`);
     } catch (err: any) {
       setError(`❌ Erreur login: ${err.message}`);
     } finally {

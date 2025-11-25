@@ -22,6 +22,13 @@ export const VEHICLE_TYPES: Record<VehicleType, {
     icon: '🚗',
     description: 'Voiture standard confortable',
   },
+  comfort: {
+    label: 'Confort',
+    pricePerKm: 1.25,
+    basePrice: 3.50,
+    icon: '🚘',
+    description: 'Véhicule confortable',
+  },
   premium: {
     label: 'Premium',
     pricePerKm: 1.50,

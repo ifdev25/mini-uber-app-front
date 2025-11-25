@@ -15,22 +15,24 @@ export interface User {
   '@type'?: string;
   id: number;
   email: string;
-  firstname: string;
-  lastname: string;
+  firstName: string;
+  lastName: string;
   phone: string;
-  usertype: UserType;
-  rating: number;
+  userType: UserType;
+  rating: number | null;
   profilePictureUrl?: string | null;
-  createdAt: string;
+  createdAt?: string;  // API Platform pourrait utiliser created_at
+  created_at?: string; // Fallback pour snake_case
+  totalRides?: number;
   driver?: Driver | null;
-  isVerified?: boolean; // Email verification status
+  isVerified?: boolean;
 }
 
 // ============================================
 // Driver Types
 // ============================================
 
-export type VehicleType = 'standard' | 'premium' | 'suv';
+export type VehicleType = 'standard' | 'comfort' | 'premium' | 'suv';
 
 export interface Driver {
   '@context'?: string;
@@ -38,18 +40,18 @@ export interface Driver {
   '@type'?: string;
   id: number;
   user: User | string; // Peut être un objet User ou une IRI "/api/users/1"
-  vehiculeModel: string;
-  vehiculeType: VehicleType;
-  vehiculeColor: string;
-  vehiculePlateNumber: string;
+  vehicleModel: string; // Backend retourne vehicleModel (pas vehiculeModel)
+  vehicleType: VehicleType; // Backend retourne vehicleType (pas vehiculeType)
+  vehicleColor: string; // Backend retourne vehicleColor (pas vehiculeColor)
   licenceNumber: string;
-  isAvailable: boolean;
-  isVerified: boolean;
+  isAvailable?: boolean; // Optionnel car pas toujours retourné par l'API
+  isVerified?: boolean;
+  verifiedAt?: string;
   currentLatitude: number;
   currentLongitude: number;
-  rating: number;
-  totalRides: number;
-  createdAt: string;
+  rating?: number;
+  totalRides?: number;
+  createdAt?: string;
 }
 
 // ============================================
@@ -66,18 +68,19 @@ export interface Ride {
   passenger: User | string; // Objet User ou IRI
   driver?: Driver | string | null; // Objet Driver ou IRI
   pickupAddress: string;
-  pickUpLatitude: number;
-  pickUpLongitude: number;
+  pickupLatitude: number;
+  pickupLongitude: number;
   dropoffAddress: string;
   dropoffLatitude: number;
   dropoffLongitude: number;
   status: RideStatus;
-  vehiculeType: VehicleType;
+  vehicleType: VehicleType;
   estimatedPrice: number;
   finalPrice?: number | null;
   estimatedDuration: number; // en minutes
   estimatedDistance: number; // en km
   createdAt: string;
+  acceptedAt?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
 }
@@ -101,10 +104,10 @@ export interface RideEstimate {
 export interface RegisterData {
   email: string;
   password: string;
-  firstname: string;
-  lastname: string;
+  firstName: string;
+  lastName: string;
   phone: string;
-  usertype: UserType;
+  userType: UserType;
 }
 
 // Login
@@ -128,13 +131,14 @@ export interface EstimateRideData {
 
 // Create Ride Request
 export interface CreateRideData {
+  passenger: string; // IRI du passager (ex: "/api/users/1")
   pickupAddress: string;
-  pickUpLatitude: number;
-  pickUpLongitude: number;
+  pickupLatitude: number;
+  pickupLongitude: number;
   dropoffAddress: string;
   dropoffLatitude: number;
   dropoffLongitude: number;
-  vehiculeType: VehicleType;
+  vehicleType: VehicleType;
 }
 
 // Update Ride Status
@@ -170,11 +174,13 @@ export interface CreateDriverData {
 // ============================================
 
 export interface HydraCollection<T> {
-  '@context': string;
-  '@id': string;
-  '@type': 'hydra:Collection';
-  'hydra:member': T[];
-  'hydra:totalItems': number;
+  '@context'?: string;
+  '@id'?: string;
+  '@type'?: 'hydra:Collection' | 'Collection';
+  'hydra:member'?: T[]; // Certains endpoints retournent hydra:member
+  member?: T[]; // D'autres retournent member
+  'hydra:totalItems'?: number;
+  totalItems?: number;
   'hydra:view'?: {
     '@id': string;
     '@type': 'hydra:PartialCollectionView';
@@ -287,17 +293,17 @@ export interface Place {
 
 export interface NewRideFormData {
   pickupAddress: string;
-  pickUpLatitude: number;
-  pickUpLongitude: number;
+  pickupLatitude: number;
+  pickupLongitude: number;
   dropoffAddress: string;
   dropoffLatitude: number;
   dropoffLongitude: number;
-  vehiculeType: VehicleType;
+  vehicleType: VehicleType;
 }
 
 export interface ProfileFormData {
-  firstname: string;
-  lastname: string;
+  firstName: string;
+  lastName: string;
   phone: string;
   email: string;
   profilePictureUrl?: string;

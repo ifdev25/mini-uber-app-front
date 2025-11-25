@@ -35,6 +35,27 @@ class ApiClient {
   }
 
   /**
+   * Transforme les données utilisateur de l'API (lowercase) vers le format frontend (camelCase)
+   */
+  private transformUserData(apiUser: any): User {
+    console.log('🔍 Données brutes de l\'API (avant transformation):', apiUser);
+
+    const transformed = {
+      ...apiUser,
+      firstName: apiUser.firstname || apiUser.firstName,
+      lastName: apiUser.lastname || apiUser.lastName,
+      userType: apiUser.usertype || apiUser.userType,
+      createdAt: apiUser.createdAt || apiUser.createdat || apiUser.created_at,
+      totalRides: apiUser.totalRides || apiUser.totalrides,
+      profilePictureUrl: apiUser.profilePictureUrl || apiUser.profilepictureurl,
+      isVerified: apiUser.isVerified !== undefined ? apiUser.isVerified : apiUser.isverified,
+    };
+
+    console.log('✅ Données transformées:', transformed);
+    return transformed;
+  }
+
+  /**
    * Stocke le token JWT
    */
   setToken(token: string): void {
@@ -84,9 +105,9 @@ class ApiClient {
 
     const defaultContentType = isApiPlatformEndpoint ? 'application/ld+json' : 'application/json';
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': defaultContentType,
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     };
 
     // Ajouter le token JWT si disponible
@@ -103,18 +124,7 @@ class ApiClient {
 
       // Gérer les erreurs HTTP
       if (!response.ok) {
-        // Tentative de parser l'erreur JSON
-        let error: ApiError;
-        try {
-          error = await response.json();
-        } catch {
-          // Si pas de JSON, créer une erreur générique
-          error = {
-            '@type': 'hydra:Error',
-            'hydra:title': 'Erreur HTTP',
-            'hydra:description': `Erreur ${response.status}: ${response.statusText}`,
-          };
-        }
+        console.error('❌ Erreur HTTP:', response.status, response.statusText);
 
         // Si 401, le token a expiré
         if (response.status === 401) {
@@ -124,12 +134,32 @@ class ApiClient {
           }
         }
 
-        throw new Error(error['hydra:description'] || 'Une erreur est survenue');
+        // Tentative de parser l'erreur JSON
+        let errorMessage = 'Une erreur est survenue';
+        try {
+          const error: ApiError = await response.json();
+          console.error('❌ Réponse d\'erreur du backend:', error);
+
+          // Afficher les violations si elles existent
+          if (error.violations && error.violations.length > 0) {
+            const violationMessages = error.violations
+              .map(v => `${v.propertyPath}: ${v.message}`)
+              .join(', ');
+            errorMessage = `Erreur de validation: ${violationMessages}`;
+          } else {
+            errorMessage = error['hydra:description'] || error['hydra:title'] || errorMessage;
+          }
+        } catch {
+          // Si pas de JSON, utiliser le status text
+          errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       // Retourner la réponse JSON
       return response.json();
-    } catch (error) {
+    } catch (error: unknown) {
       // Gérer les erreurs réseau
       if (error instanceof Error) {
         throw error;
@@ -147,10 +177,11 @@ class ApiClient {
    * POST /api/users
    */
   async register(data: RegisterData): Promise<User> {
-    return this.request<User>('/api/users', {
+    const userData = await this.request<any>('/api/users', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    return this.transformUserData(userData);
   }
 
   /**
@@ -174,7 +205,8 @@ class ApiClient {
    * GET /api/me
    */
   async getMe(): Promise<User> {
-    return this.request<User>('/api/me');
+    const userData = await this.request<any>('/api/me');
+    return this.transformUserData(userData);
   }
 
   /**
@@ -182,7 +214,8 @@ class ApiClient {
    * GET /api/users/{id}
    */
   async getUser(id: number): Promise<User> {
-    return this.request<User>(`/api/users/${id}`);
+    const userData = await this.request<any>(`/api/users/${id}`);
+    return this.transformUserData(userData);
   }
 
   /**
@@ -201,13 +234,14 @@ class ApiClient {
    * PATCH /api/users/{id}
    */
   async updateUser(id: number, data: Partial<User>): Promise<User> {
-    return this.request<User>(`/api/users/${id}`, {
+    const userData = await this.request<any>(`/api/users/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/merge-patch+json',
       },
       body: JSON.stringify(data),
     });
+    return this.transformUserData(userData);
   }
 
   // ============================================
@@ -230,10 +264,19 @@ class ApiClient {
    * POST /api/rides
    */
   async createRide(data: CreateRideData): Promise<Ride> {
-    return this.request<Ride>('/api/rides', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    console.log('🌐 API createRide - Données envoyées:', data);
+    console.log('🌐 API createRide - JSON:', JSON.stringify(data, null, 2));
+    try {
+      const result = await this.request<Ride>('/api/rides', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      console.log('✅ API createRide - Réponse reçue:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ API createRide - Erreur:', error);
+      throw error;
+    }
   }
 
   /**
@@ -267,13 +310,29 @@ class ApiClient {
   }
 
   /**
-   * Mettre à jour le statut d'une course
+   * Mettre à jour le statut d'une course (chauffeur)
    * PATCH /api/rides/{id}/status
    */
   async updateRideStatus(rideId: number, status: string): Promise<Ride> {
     return this.request<Ride>(`/api/rides/${rideId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    });
+  }
+
+  /**
+   * Annuler une course (passager)
+   * PATCH /api/rides/{id}/status
+   * Note: Le passager peut annuler quand status='pending'
+   */
+  async cancelRide(rideId: number): Promise<Ride> {
+    console.log('🔄 Annulation de la course', rideId);
+    return this.request<Ride>(`/api/rides/${rideId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'cancelled' }),
+      headers: {
+        'Content-Type': 'application/json', // /status utilise application/json
+      },
     });
   }
 

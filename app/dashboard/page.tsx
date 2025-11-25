@@ -15,7 +15,7 @@ function DashboardContent() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              Bienvenue, {user?.firstname} {user?.lastname}
+              Bienvenue, {user?.firstName} {user?.lastName}
             </h1>
             <p className="text-gray-600 mt-1">
               {isDriver && 'Tableau de bord chauffeur'}
@@ -50,7 +50,7 @@ function DashboardContent() {
               <CardTitle className="text-sm font-medium text-gray-600">Type de compte</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xl font-semibold capitalize">{user?.usertype}</p>
+              <p className="text-xl font-semibold capitalize">{user?.userType || 'Non défini'}</p>
             </CardContent>
           </Card>
 
@@ -76,12 +76,17 @@ function DashboardContent() {
               </div>
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-600">Type d'utilisateur</span>
-                <span className="font-medium capitalize">{user?.usertype}</span>
+                <span className="font-medium capitalize">{user?.userType || 'Non défini'}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-600">Membre depuis</span>
                 <span className="font-medium">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('fr-FR') : '-'}
+                  {/*(user?.createdAt || user?.created_at) ? new Date(user.createdAt || user.created_at!).toLocaleDateString('fr-FR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'Non disponible'}*/}
+                  { JSON.stringify(user, null, 2) || 'Non défini'}
                 </span>
               </div>
             </div>
@@ -105,14 +110,48 @@ function DashboardContent() {
 
         {isPassenger && (
           <div className="mt-6">
-            <Card className="bg-green-50 border-green-200">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-green-900">Mode Passager</CardTitle>
+                <CardTitle>Actions rapides</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-green-800">
-                  Les fonctionnalités de réservation de course seront disponibles dans la prochaine phase de développement.
-                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Button
+                    variant="default"
+                    className="w-full h-24 flex flex-col gap-2"
+                    onClick={() => window.location.href = '/passenger/book'}
+                  >
+                    <span className="text-2xl">🚗</span>
+                    <span>Réserver une course</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full h-24 flex flex-col gap-2"
+                    onClick={() => window.location.href = '/passenger/history'}
+                  >
+                    <span className="text-2xl">📊</span>
+                    <span>Historique des courses</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full h-24 flex flex-col gap-2"
+                    onClick={() => window.location.href = '/passenger/profile'}
+                  >
+                    <span className="text-2xl">👤</span>
+                    <span>Mon profil</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full h-24 flex flex-col gap-2"
+                    onClick={() => window.location.href = '/'}
+                  >
+                    <span className="text-2xl">🏠</span>
+                    <span>Page d'accueil</span>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
