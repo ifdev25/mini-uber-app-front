@@ -16,6 +16,8 @@ import {
   UpdateDriverLocationData,
   UpdateDriverAvailabilityData,
   CreateDriverData,
+  CreateReviewData,
+  Review,
   HydraCollection,
   ApiError,
 } from './types';
@@ -372,24 +374,63 @@ class ApiClient {
 
   /**
    * Mettre à jour la position GPS du chauffeur
-   * PATCH /api/drivers/location
+   * Note: Nécessite de récupérer l'ID du driver d'abord
+   * PATCH /api/drivers/{id}
    */
   async updateDriverLocation(lat: number, lng: number): Promise<Driver> {
-    return this.request<Driver>('/api/drivers/location', {
-      method: 'PATCH',
-      body: JSON.stringify({ lat, lng }),
+    // Récupérer l'utilisateur connecté pour obtenir l'ID
+    const user = await this.getMe();
+
+    // Récupérer la liste des drivers pour trouver celui correspondant à cet utilisateur
+    const driversResponse = await this.getDrivers();
+    const drivers = driversResponse['hydra:member'] || driversResponse.member || [];
+
+    // Trouver le driver correspondant à l'utilisateur connecté
+    const currentDriver = drivers.find((driver: Driver) => {
+      if (typeof driver.user === 'object' && driver.user) {
+        return driver.user.id === user.id;
+      }
+      return false;
+    });
+
+    if (!currentDriver) {
+      throw new Error('Profil chauffeur introuvable');
+    }
+
+    // Mettre à jour la position
+    return this.updateDriver(currentDriver.id, {
+      currentLatitude: lat,
+      currentLongitude: lng,
     });
   }
 
   /**
    * Mettre à jour la disponibilité du chauffeur
-   * PATCH /api/drivers/availability
+   * Note: Nécessite de récupérer l'ID du driver d'abord
+   * PATCH /api/drivers/{id}
    */
   async updateDriverAvailability(isAvailable: boolean): Promise<Driver> {
-    return this.request<Driver>('/api/drivers/availability', {
-      method: 'PATCH',
-      body: JSON.stringify({ isAvailable }),
+    // Récupérer l'utilisateur connecté pour obtenir l'ID
+    const user = await this.getMe();
+
+    // Récupérer la liste des drivers pour trouver celui correspondant à cet utilisateur
+    const driversResponse = await this.getDrivers();
+    const drivers = driversResponse['hydra:member'] || driversResponse.member || [];
+
+    // Trouver le driver correspondant à l'utilisateur connecté
+    const currentDriver = drivers.find((driver: Driver) => {
+      if (typeof driver.user === 'object' && driver.user) {
+        return driver.user.id === user.id;
+      }
+      return false;
     });
+
+    if (!currentDriver) {
+      throw new Error('Profil chauffeur introuvable');
+    }
+
+    // Mettre à jour la disponibilité
+    return this.updateDriver(currentDriver.id, { isAvailable });
   }
 
   /**
@@ -404,6 +445,33 @@ class ApiClient {
       },
       body: JSON.stringify(data),
     });
+  }
+
+  // ============================================
+  // Reviews / Ratings
+  // ============================================
+
+  /**
+   * Créer une notation/avis pour un chauffeur après une course
+   * POST /api/reviews
+   */
+  async createReview(data: CreateReviewData): Promise<Review> {
+    console.log('📝 Création d\'une notation:', data);
+    return this.request<Review>('/api/reviews', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Récupérer les avis d'un utilisateur
+   * GET /api/reviews
+   */
+  async getReviews(filters?: Record<string, any>): Promise<HydraCollection<Review>> {
+    const params = new URLSearchParams(filters).toString();
+    return this.request<HydraCollection<Review>>(
+      `/api/reviews${params ? `?${params}` : ''}`
+    );
   }
 }
 

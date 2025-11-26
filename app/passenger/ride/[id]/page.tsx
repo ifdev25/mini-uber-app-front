@@ -202,16 +202,20 @@ export default function RideTrackingPage() {
                   <span className="font-medium">Nom:</span> {driverUser.firstName}{' '}
                   {driverUser.lastName}
                 </p>
-                <p>
-                  <span className="font-medium">Note:</span> ⭐ {driver.rating.toFixed(1)}
-                </p>
+                {driver.rating && (
+                  <p>
+                    <span className="font-medium">Note:</span> ⭐ {driver.rating.toFixed(1)}
+                  </p>
+                )}
                 <p>
                   <span className="font-medium">Véhicule:</span>{' '}
-                  {vehicleConfig.icon} {driver.vehiculeModel} ({driver.vehiculeColor})
+                  {vehicleConfig.icon} {driver.vehicleModel} ({driver.vehicleColor})
                 </p>
-                <p>
-                  <span className="font-medium">Plaque:</span> {driver.vehiculePlateNumber}
-                </p>
+                {driver.licenceNumber && (
+                  <p>
+                    <span className="font-medium">Licence:</span> {driver.licenceNumber}
+                  </p>
+                )}
               </div>
             </Card>
           )}

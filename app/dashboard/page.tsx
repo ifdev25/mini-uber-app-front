@@ -81,12 +81,11 @@ function DashboardContent() {
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-600">Membre depuis</span>
                 <span className="font-medium">
-                  {/*(user?.createdAt || user?.created_at) ? new Date(user.createdAt || user.created_at!).toLocaleDateString('fr-FR', {
+                  {(user?.createdAt || user?.created_at) ? new Date(user.createdAt || user.created_at!).toLocaleDateString('fr-FR', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric'
-                  }) : 'Non disponible'}*/}
-                  { JSON.stringify(user, null, 2) || 'Non défini'}
+                  }) : 'Non disponible'}
                 </span>
               </div>
             </div>
@@ -100,9 +99,16 @@ function DashboardContent() {
                 <CardTitle className="text-blue-900">Mode Chauffeur</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-blue-800">
-                  Les fonctionnalités chauffeur seront disponibles dans la prochaine phase de développement.
+                <p className="text-blue-800 mb-4">
+                  Accédez à votre tableau de bord chauffeur pour gérer vos courses et accepter de nouvelles demandes.
                 </p>
+                <Button
+                  variant="default"
+                  className="w-full"
+                  onClick={() => window.location.href = '/driver/dashboard'}
+                >
+                  🚗 Accéder au dashboard chauffeur
+                </Button>
               </CardContent>
             </Card>
           </div>

@@ -124,7 +124,7 @@ export default function RideHistoryPage() {
             <span className="font-medium">
               {driverUser.firstName} {driverUser.lastName}
             </span>
-            {driver && (
+            {driver && driver.rating && (
               <span className="ml-2">⭐ {driver.rating.toFixed(1)}</span>
             )}
           </div>

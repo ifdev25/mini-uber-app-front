@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useRide } from '@/hooks/useRides';
+import { api } from '@/lib/api';
 import { Driver, User } from '@/lib/types';
 
 export default function RateDriverPage() {
@@ -41,17 +42,23 @@ export default function RateDriverPage() {
     setIsSubmitting(true);
 
     try {
-      // TODO: Appeler l'API pour enregistrer la notation
-      console.log('Rating submitted:', { rideId, rating, comment });
+      // Appeler l'API pour enregistrer la notation
+      const reviewData = {
+        ride: `/api/rides/${ride.id}`,
+        rating,
+        comment: comment.trim() || undefined,
+      };
 
-      // Simuler un délai
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      console.log('📝 Envoi de la notation:', reviewData);
+      const review = await api.createReview(reviewData);
+      console.log('✅ Notation enregistrée:', review);
 
       alert('Merci pour votre évaluation !');
       router.push('/passenger/history');
     } catch (error) {
-      console.error('Error submitting rating:', error);
-      alert('Erreur lors de l\'envoi de la notation');
+      console.error('❌ Erreur lors de l\'envoi de la notation:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      alert(`Erreur lors de l'envoi de la notation:\n${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -113,11 +120,14 @@ export default function RateDriverPage() {
                 {driverUser.firstName} {driverUser.lastName}
               </p>
               <p className="text-sm text-gray-600">
-                {driver.vehiculeModel} - {driver.vehiculePlateNumber}
+                {driver.vehicleModel}
+                {driver.licenceNumber && ` - ${driver.licenceNumber}`}
               </p>
-              <p className="text-sm text-gray-600">
-                ⭐ {driver.rating.toFixed(1)} ({driver.totalRides} courses)
-              </p>
+              {driver.rating && driver.totalRides && (
+                <p className="text-sm text-gray-600">
+                  ⭐ {driver.rating.toFixed(1)} ({driver.totalRides} courses)
+                </p>
+              )}
             </div>
           </div>
         </div>

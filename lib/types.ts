@@ -169,6 +169,26 @@ export interface CreateDriverData {
   currentLongitude: number;
 }
 
+// Create Review/Rating
+export interface CreateReviewData {
+  ride: string; // IRI "/api/rides/{id}"
+  rating: number; // 1-5
+  comment?: string; // Optionnel
+}
+
+export interface Review {
+  '@context'?: string;
+  '@id'?: string;
+  '@type'?: string;
+  id: number;
+  ride: Ride | string;
+  reviewer: User | string; // L'utilisateur qui note
+  reviewee: User | string; // L'utilisateur noté
+  rating: number;
+  comment?: string;
+  createdAt: string;
+}
+
 // ============================================
 // API Platform Hydra Collection Types
 // ============================================
