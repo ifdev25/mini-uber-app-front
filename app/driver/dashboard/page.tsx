@@ -12,7 +12,7 @@ import { api } from '@/lib/api';
 
 export default function DriverDashboardPage() {
   const router = useRouter();
-  const { user, isLoadingUser, logout } = useAuth();
+  const { user, isLoadingUser, logout, refetch: refetchUser } = useAuth();
   const [isAvailable, setIsAvailable] = useState(false);
   const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [acceptingRideId, setAcceptingRideId] = useState<number | null>(null);
@@ -175,6 +175,10 @@ export default function DriverDashboardPage() {
       await api.updateDriverAvailability(newAvailability);
       setIsAvailable(newAvailability);
       console.log(`✅ Disponibilité mise à jour: ${newAvailability ? 'Disponible' : 'Indisponible'}`);
+
+      // Rafraîchir les données utilisateur pour synchroniser user.driverProfile.isAvailable
+      await refetchUser();
+      console.log('🔄 Données utilisateur rafraîchies');
     } catch (error) {
       console.error('❌ Erreur lors de la mise à jour de la disponibilité:', error);
       alert('Impossible de mettre à jour votre disponibilité');
