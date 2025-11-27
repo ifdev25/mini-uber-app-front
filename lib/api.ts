@@ -97,15 +97,12 @@ class ApiClient {
   ): Promise<T> {
     // Déterminer le Content-Type approprié
     // API Platform utilise application/ld+json par défaut
-    // Sauf pour les endpoints custom comme /api/login
-    const isApiPlatformEndpoint = !endpoint.includes('/login') &&
-                                    !endpoint.includes('/ride-estimates') &&
-                                    !endpoint.includes('/accept') &&
-                                    !endpoint.includes('/status') &&
-                                    !endpoint.includes('/location') &&
-                                    !endpoint.includes('/availability');
+    // Sauf pour les endpoints custom non-API Platform comme /api/login et /api/ride-estimates
+    const isCustomEndpoint = endpoint.includes('/login') ||
+                              endpoint.includes('/ride-estimates') ||
+                              endpoint.includes('/register');
 
-    const defaultContentType = isApiPlatformEndpoint ? 'application/ld+json' : 'application/json';
+    const defaultContentType = isCustomEndpoint ? 'application/json' : 'application/ld+json';
 
     const headers: Record<string, string> = {
       'Content-Type': defaultContentType,
@@ -127,6 +124,8 @@ class ApiClient {
       // Gérer les erreurs HTTP
       if (!response.ok) {
         console.error('❌ Erreur HTTP:', response.status, response.statusText);
+        console.error('❌ URL:', `${this.baseUrl}${endpoint}`);
+        console.error('❌ Méthode:', options.method || 'GET');
 
         // Si 401, le token a expiré
         if (response.status === 401) {
@@ -138,9 +137,11 @@ class ApiClient {
 
         // Tentative de parser l'erreur JSON
         let errorMessage = 'Une erreur est survenue';
+        let errorDetails: any = null;
         try {
           const error: ApiError = await response.json();
           console.error('❌ Réponse d\'erreur du backend:', error);
+          errorDetails = error;
 
           // Afficher les violations si elles existent
           if (error.violations && error.violations.length > 0) {
@@ -151,11 +152,13 @@ class ApiClient {
           } else {
             errorMessage = error['hydra:description'] || error['hydra:title'] || errorMessage;
           }
-        } catch {
+        } catch (parseError) {
           // Si pas de JSON, utiliser le status text
+          console.error('❌ Impossible de parser la réponse JSON:', parseError);
           errorMessage = `Erreur ${response.status}: ${response.statusText}`;
         }
 
+        console.error('❌ Message d\'erreur final:', errorMessage);
         throw new Error(errorMessage);
       }
 
@@ -305,10 +308,19 @@ class ApiClient {
    * POST /api/rides/{id}/accept
    */
   async acceptRide(rideId: number): Promise<Ride> {
-    return this.request<Ride>(`/api/rides/${rideId}/accept`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
+    console.log('🚗 Tentative d\'acceptation de la course', rideId);
+    try {
+      const result = await this.request<Ride>(`/api/rides/${rideId}/accept`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      console.log('✅ Course acceptée avec succès:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'acceptation de la course', rideId);
+      console.error('❌ Détails de l\'erreur:', error);
+      throw error;
+    }
   }
 
   /**
@@ -318,6 +330,9 @@ class ApiClient {
   async updateRideStatus(rideId: number, status: string): Promise<Ride> {
     return this.request<Ride>(`/api/rides/${rideId}/status`, {
       method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/merge-patch+json',
+      },
       body: JSON.stringify({ status }),
     });
   }
@@ -331,10 +346,10 @@ class ApiClient {
     console.log('🔄 Annulation de la course', rideId);
     return this.request<Ride>(`/api/rides/${rideId}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'cancelled' }),
       headers: {
-        'Content-Type': 'application/json', // /status utilise application/json
+        'Content-Type': 'application/merge-patch+json',
       },
+      body: JSON.stringify({ status: 'cancelled' }),
     });
   }
 
@@ -374,63 +389,35 @@ class ApiClient {
 
   /**
    * Mettre à jour la position GPS du chauffeur
-   * Note: Nécessite de récupérer l'ID du driver d'abord
-   * PATCH /api/drivers/{id}
+   * PATCH /api/drivers/location
+   * Identifie automatiquement le chauffeur via le token JWT
    */
   async updateDriverLocation(lat: number, lng: number): Promise<Driver> {
-    // Récupérer l'utilisateur connecté pour obtenir l'ID
-    const user = await this.getMe();
-
-    // Récupérer la liste des drivers pour trouver celui correspondant à cet utilisateur
-    const driversResponse = await this.getDrivers();
-    const drivers = driversResponse['hydra:member'] || driversResponse.member || [];
-
-    // Trouver le driver correspondant à l'utilisateur connecté
-    const currentDriver = drivers.find((driver: Driver) => {
-      if (typeof driver.user === 'object' && driver.user) {
-        return driver.user.id === user.id;
-      }
-      return false;
-    });
-
-    if (!currentDriver) {
-      throw new Error('Profil chauffeur introuvable');
-    }
-
-    // Mettre à jour la position
-    return this.updateDriver(currentDriver.id, {
-      currentLatitude: lat,
-      currentLongitude: lng,
+    return this.request<Driver>('/api/drivers/location', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/merge-patch+json',
+      },
+      body: JSON.stringify({
+        currentLatitude: lat,
+        currentLongitude: lng,
+      }),
     });
   }
 
   /**
    * Mettre à jour la disponibilité du chauffeur
-   * Note: Nécessite de récupérer l'ID du driver d'abord
-   * PATCH /api/drivers/{id}
+   * PATCH /api/drivers/availability
+   * Identifie automatiquement le chauffeur via le token JWT
    */
   async updateDriverAvailability(isAvailable: boolean): Promise<Driver> {
-    // Récupérer l'utilisateur connecté pour obtenir l'ID
-    const user = await this.getMe();
-
-    // Récupérer la liste des drivers pour trouver celui correspondant à cet utilisateur
-    const driversResponse = await this.getDrivers();
-    const drivers = driversResponse['hydra:member'] || driversResponse.member || [];
-
-    // Trouver le driver correspondant à l'utilisateur connecté
-    const currentDriver = drivers.find((driver: Driver) => {
-      if (typeof driver.user === 'object' && driver.user) {
-        return driver.user.id === user.id;
-      }
-      return false;
+    return this.request<Driver>('/api/drivers/availability', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/merge-patch+json',
+      },
+      body: JSON.stringify({ isAvailable }),
     });
-
-    if (!currentDriver) {
-      throw new Error('Profil chauffeur introuvable');
-    }
-
-    // Mettre à jour la disponibilité
-    return this.updateDriver(currentDriver.id, { isAvailable });
   }
 
   /**
@@ -453,11 +440,11 @@ class ApiClient {
 
   /**
    * Créer une notation/avis pour un chauffeur après une course
-   * POST /api/reviews
+   * POST /api/ratings
    */
   async createReview(data: CreateReviewData): Promise<Review> {
     console.log('📝 Création d\'une notation:', data);
-    return this.request<Review>('/api/reviews', {
+    return this.request<Review>('/api/ratings', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -465,12 +452,12 @@ class ApiClient {
 
   /**
    * Récupérer les avis d'un utilisateur
-   * GET /api/reviews
+   * GET /api/ratings
    */
   async getReviews(filters?: Record<string, any>): Promise<HydraCollection<Review>> {
     const params = new URLSearchParams(filters).toString();
     return this.request<HydraCollection<Review>>(
-      `/api/reviews${params ? `?${params}` : ''}`
+      `/api/ratings${params ? `?${params}` : ''}`
     );
   }
 }

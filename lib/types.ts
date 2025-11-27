@@ -9,6 +9,17 @@
 
 export type UserType = 'passenger' | 'driver' | 'admin';
 
+// DriverProfile simplifié retourné par /api/me
+export interface DriverProfile {
+  id: number;
+  vehicleModel: string;
+  vehicleColor: string;
+  vehicleType: VehicleType;
+  isAvailable: boolean;
+  currentLatitude: number;
+  currentLongitude: number;
+}
+
 export interface User {
   '@context'?: string;
   '@id'?: string;
@@ -24,7 +35,8 @@ export interface User {
   createdAt?: string;  // API Platform pourrait utiliser created_at
   created_at?: string; // Fallback pour snake_case
   totalRides?: number;
-  driver?: Driver | null;
+  driver?: Driver | null;  // Relation complète Driver (utilisée dans les rides)
+  driverProfile?: DriverProfile | null;  // Profil simplifié retourné par /api/me
   isVerified?: boolean;
 }
 
@@ -172,7 +184,9 @@ export interface CreateDriverData {
 // Create Review/Rating
 export interface CreateReviewData {
   ride: string; // IRI "/api/rides/{id}"
-  rating: number; // 1-5
+  rater: string; // IRI "/api/users/{id}" - L'utilisateur qui note
+  rated: string; // IRI "/api/users/{id}" - L'utilisateur noté
+  score: number; // 1-5
   comment?: string; // Optionnel
 }
 
@@ -182,9 +196,9 @@ export interface Review {
   '@type'?: string;
   id: number;
   ride: Ride | string;
-  reviewer: User | string; // L'utilisateur qui note
-  reviewee: User | string; // L'utilisateur noté
-  rating: number;
+  rater: User | string; // L'utilisateur qui note
+  rated: User | string; // L'utilisateur noté
+  score: number;
   comment?: string;
   createdAt: string;
 }

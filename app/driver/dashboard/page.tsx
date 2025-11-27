@@ -15,6 +15,8 @@ export default function DriverDashboardPage() {
   const { user, isLoadingUser, logout } = useAuth();
   const [isAvailable, setIsAvailable] = useState(false);
   const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
+  const [acceptingRideId, setAcceptingRideId] = useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'inactive' | 'active' | 'error'>('inactive');
 
   // Récupérer toutes les courses
   const { data: ridesData, isLoading: ridesLoading, refetch } = useRides();
@@ -36,9 +38,113 @@ export default function DriverDashboardPage() {
         router.push('/login');
       } else if (user.userType?.toLowerCase() !== 'driver') {
         router.push('/login');
+      } else {
+        // Logger les informations du driver pour debugging
+        console.log('👤 Informations du chauffeur:', {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          userType: user.userType,
+          isVerified: user.isVerified,
+          driverProfile: user.driverProfile,
+        });
+
+        // Vérifier les conditions requises
+        console.log('✅ Conditions pour accepter des courses:');
+        console.log('  - Compte vérifié:', user.isVerified ? '✅' : '❌');
+        console.log('  - Profil driver:', user.driverProfile ? '✅' : '❌');
+        if (user.driverProfile) {
+          console.log('  - Disponible:', user.driverProfile.isAvailable ? '✅' : '❌');
+          console.log('  - Type de véhicule:', user.driverProfile.vehicleType);
+        }
       }
     }
   }, [user, isLoadingUser, router]);
+
+  // Synchroniser isAvailable avec le profil driver au chargement
+  useEffect(() => {
+    if (user?.driverProfile) {
+      setIsAvailable(user.driverProfile.isAvailable);
+      console.log('🔄 Synchronisation de la disponibilité:', user.driverProfile.isAvailable);
+    }
+  }, [user?.driverProfile?.isAvailable]);
+
+  // Mise à jour automatique de la position GPS du driver
+  useEffect(() => {
+    // Ne pas démarrer la géolocalisation si le driver n'est pas disponible
+    if (!isAvailable || !user?.driverProfile) {
+      setGpsStatus('inactive');
+      return;
+    }
+
+    console.log('📍 Démarrage du suivi GPS du driver');
+
+    let watchId: number | null = null;
+    let lastUpdateTime = 0;
+    const UPDATE_INTERVAL = 15000; // 15 secondes
+
+    // Fonction pour mettre à jour la position
+    const updatePosition = async (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      const now = Date.now();
+
+      // Indiquer que le GPS est actif dès la première position
+      setGpsStatus('active');
+
+      // Limiter les mises à jour à une toutes les 15 secondes
+      if (now - lastUpdateTime < UPDATE_INTERVAL) {
+        return;
+      }
+
+      lastUpdateTime = now;
+
+      try {
+        console.log(`📍 Envoi de la position: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        await api.updateDriverLocation(latitude, longitude);
+        console.log('✅ Position mise à jour avec succès');
+      } catch (error) {
+        console.error('❌ Erreur lors de la mise à jour de la position:', error);
+        setGpsStatus('error');
+      }
+    };
+
+    // Fonction de gestion d'erreur
+    const handleError = (error: GeolocationPositionError) => {
+      console.error('❌ Erreur de géolocalisation:', error.message);
+      setGpsStatus('error');
+      if (error.code === error.PERMISSION_DENIED) {
+        alert('Veuillez autoriser la géolocalisation pour que les passagers puissent vous localiser.');
+      }
+    };
+
+    // Vérifier que la géolocalisation est supportée
+    if (navigator.geolocation) {
+      // Utiliser watchPosition pour un suivi continu
+      watchId = navigator.geolocation.watchPosition(
+        updatePosition,
+        handleError,
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    } else {
+      console.error('❌ La géolocalisation n\'est pas supportée par ce navigateur');
+      setGpsStatus('error');
+      alert('Votre navigateur ne supporte pas la géolocalisation');
+    }
+
+    // Nettoyage : arrêter le suivi quand le composant est démonté ou quand le driver devient indisponible
+    return () => {
+      if (watchId !== null) {
+        console.log('🛑 Arrêt du suivi GPS du driver');
+        navigator.geolocation.clearWatch(watchId);
+        setGpsStatus('inactive');
+      }
+    };
+  }, [isAvailable, user?.driverProfile]);
 
   // Récupérer toutes les courses
   const allRides = ridesData?.['hydra:member'] || ridesData?.member || [];
@@ -79,16 +185,83 @@ export default function DriverDashboardPage() {
 
   // Accepter une course
   const handleAcceptRide = (rideId: number) => {
+    // Ne pas permettre d'accepter si une course est déjà en cours d'acceptation
+    if (acceptingRideId !== null) {
+      alert('⏳ Une course est déjà en cours d\'acceptation, veuillez patienter...');
+      return;
+    }
+
+    // Ne pas permettre d'accepter si le chauffeur a déjà une course active
+    if (activeRide) {
+      alert('⚠️ Vous avez déjà une course active. Terminez-la avant d\'en accepter une nouvelle.');
+      return;
+    }
+
+    // Vérifier les conditions requises par le backend AVANT d'envoyer la requête
+    const driverProfile = user?.driverProfile;
+
+    // 1. Vérifier que le driver a un profil
+    if (!driverProfile) {
+      alert('❌ Erreur: Vous n\'avez pas de profil chauffeur.\n\nVeuillez créer un profil chauffeur pour accepter des courses.');
+      return;
+    }
+
+    // 2. Vérifier que le driver est vérifié
+    if (!user?.isVerified) {
+      alert('❌ Compte non vérifié\n\nVotre compte chauffeur doit être vérifié par un administrateur avant de pouvoir accepter des courses.\n\nVeuillez contacter le support.');
+      return;
+    }
+
+    // 3. Vérifier que le driver est disponible
+    if (!driverProfile.isAvailable) {
+      alert('❌ Vous n\'êtes pas disponible\n\nActivez votre disponibilité en cliquant sur le bouton "Disponible" pour accepter des courses.');
+      return;
+    }
+
+    // 4. Vérifier que le type de véhicule correspond
+    const ride = pendingRides.find((r: Ride) => r.id === rideId);
+    if (ride && driverProfile.vehicleType !== ride.vehicleType) {
+      alert(`❌ Type de véhicule incompatible\n\nCette course nécessite un véhicule de type "${ride.vehicleType}" mais votre véhicule est de type "${driverProfile.vehicleType}".\n\nVous ne pouvez accepter que des courses correspondant à votre type de véhicule.`);
+      return;
+    }
+
     const confirmed = confirm('Voulez-vous accepter cette course ?');
     if (confirmed) {
+      // Marquer cette course comme étant en cours d'acceptation
+      setAcceptingRideId(rideId);
+
       acceptRide.mutate(rideId, {
         onSuccess: (ride) => {
           console.log('✅ Course acceptée:', ride);
+          setAcceptingRideId(null);
           router.push(`/driver/ride/${ride.id}`);
         },
         onError: (error) => {
-          console.error('❌ Erreur:', error);
-          alert(`Impossible d'accepter la course: ${error.message}`);
+          console.error('❌ Erreur lors de l\'acceptation:', error);
+          setAcceptingRideId(null);
+
+          // Messages d'erreur plus clairs basés sur l'API documentation
+          let errorMessage = error.message;
+
+          if (errorMessage.includes('Only drivers can accept rides')) {
+            errorMessage = 'Seuls les chauffeurs peuvent accepter des courses.';
+          } else if (errorMessage.includes('Driver profile not found')) {
+            errorMessage = 'Profil chauffeur introuvable. Veuillez créer un profil chauffeur.';
+          } else if (errorMessage.includes('Driver account not verified')) {
+            errorMessage = 'Votre compte chauffeur n\'est pas vérifié. Contactez le support.';
+          } else if (errorMessage.includes('Driver is not available')) {
+            errorMessage = 'Vous devez être disponible pour accepter des courses. Activez votre disponibilité.';
+          } else if (errorMessage.includes('Ride already accepted') || errorMessage.includes('400')) {
+            errorMessage = 'Cette course a déjà été acceptée par un autre chauffeur.';
+          } else if (errorMessage.includes('Vehicle type mismatch')) {
+            errorMessage = 'Le type de véhicule ne correspond pas aux exigences de la course.';
+          } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+            errorMessage = 'Vous n\'êtes pas autorisé à accepter cette course.';
+          } else if (errorMessage.includes('404')) {
+            errorMessage = 'Cette course n\'existe plus ou a été annulée.';
+          }
+
+          alert(`❌ Impossible d'accepter la course:\n\n${errorMessage}`);
         },
       });
     }
@@ -134,6 +307,39 @@ export default function DriverDashboardPage() {
               ? '✅ Disponible'
               : '⭕ Indisponible'}
           </Button>
+
+          {/* Indicateur GPS */}
+          {isAvailable && (
+            <div
+              className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                gpsStatus === 'active'
+                  ? 'bg-green-100 text-green-800'
+                  : gpsStatus === 'error'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {gpsStatus === 'active' && (
+                <>
+                  <span className="animate-pulse">📍</span>
+                  <span>GPS actif</span>
+                </>
+              )}
+              {gpsStatus === 'error' && (
+                <>
+                  <span>❌</span>
+                  <span>GPS erreur</span>
+                </>
+              )}
+              {gpsStatus === 'inactive' && (
+                <>
+                  <span>⏳</span>
+                  <span>GPS démarrage...</span>
+                </>
+              )}
+            </div>
+          )}
+
           <Button onClick={logout} variant="outline">
             Déconnexion
           </Button>
@@ -200,8 +406,19 @@ export default function DriverDashboardPage() {
               <div className="space-y-4">
                 {pendingRides.map((ride: Ride) => {
                   const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
+                  const driverProfile = user?.driverProfile;
+                  const isVehicleTypeMatch = driverProfile && driverProfile.vehicleType === ride.vehicleType;
+                  const canAcceptRide = user?.isVerified && driverProfile?.isAvailable && isVehicleTypeMatch;
+
                   return (
-                    <Card key={ride.id} className="p-4 border-2 hover:border-blue-300 transition">
+                    <Card
+                      key={ride.id}
+                      className={`p-4 border-2 transition ${
+                        !isVehicleTypeMatch
+                          ? 'border-gray-200 bg-gray-50 opacity-60'
+                          : 'hover:border-blue-300'
+                      }`}
+                    >
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="md:col-span-2 space-y-2">
                           <div>
@@ -219,10 +436,15 @@ export default function DriverDashboardPage() {
                             <span>
                               ⏱️ {ride.estimatedDuration} min
                             </span>
-                            <span>
+                            <span className={!isVehicleTypeMatch ? 'text-orange-600 font-semibold' : ''}>
                               {vehicleConfig.icon} {vehicleConfig.label}
                             </span>
                           </div>
+                          {!isVehicleTypeMatch && driverProfile && (
+                            <p className="text-xs text-orange-600 font-medium">
+                              ⚠️ Type de véhicule incompatible (vous avez: {VEHICLE_TYPES[driverProfile.vehicleType]?.label})
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col justify-between">
                           <div>
@@ -234,9 +456,16 @@ export default function DriverDashboardPage() {
                           <Button
                             className="w-full mt-2"
                             onClick={() => handleAcceptRide(ride.id)}
-                            disabled={acceptRide.isPending || !!activeRide}
+                            disabled={acceptingRideId !== null || !!activeRide || !canAcceptRide}
+                            variant={!canAcceptRide ? 'outline' : 'default'}
                           >
-                            {acceptRide.isPending ? '⏳ Acceptation...' : '✅ Accepter'}
+                            {acceptingRideId === ride.id
+                              ? '⏳ Acceptation...'
+                              : acceptingRideId !== null
+                              ? '⏳ En cours...'
+                              : !isVehicleTypeMatch
+                              ? '❌ Incompatible'
+                              : '✅ Accepter'}
                           </Button>
                         </div>
                       </div>
@@ -270,7 +499,7 @@ export default function DriverDashboardPage() {
           {/* Infos chauffeur */}
           <Card className="p-6">
             <h2 className="text-xl font-bold mb-4">👤 Mon profil</h2>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p>
                 <span className="text-sm text-gray-600">Nom:</span>{' '}
                 <span className="font-medium">
@@ -285,17 +514,58 @@ export default function DriverDashboardPage() {
                 <span className="text-sm text-gray-600">Type:</span>{' '}
                 <span className="font-medium">Chauffeur</span>
               </p>
+
+              {/* Statut de vérification */}
+              <div className="pt-2 border-t">
+                <p className="text-sm text-gray-600 mb-1">Statut du compte:</p>
+                <div className="flex items-center gap-2">
+                  {user?.isVerified ? (
+                    <span className="text-sm font-medium text-green-600">✅ Vérifié</span>
+                  ) : (
+                    <span className="text-sm font-medium text-orange-600">⚠️ Non vérifié</span>
+                  )}
+                </div>
+                {!user?.isVerified && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Votre compte doit être vérifié pour accepter des courses
+                  </p>
+                )}
+              </div>
+
+              {/* Infos véhicule */}
+              {user?.driverProfile && (
+                <div className="pt-2 border-t">
+                  <p className="text-sm text-gray-600 mb-1">Véhicule:</p>
+                  <p className="text-sm font-medium">
+                    {user.driverProfile.vehicleModel} ({user.driverProfile.vehicleColor})
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Type: {VEHICLE_TYPES[user.driverProfile.vehicleType]?.label || user.driverProfile.vehicleType}
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
 
           {/* Aide rapide */}
           <Card className="p-6 bg-gray-50">
-            <h2 className="text-lg font-bold mb-3">💡 Aide rapide</h2>
+            <h2 className="text-lg font-bold mb-3">💡 Conditions pour accepter une course</h2>
             <div className="space-y-2 text-sm">
-              <p>• Activez votre disponibilité pour recevoir des courses</p>
-              <p>• Les courses en attente s'affichent automatiquement</p>
-              <p>• Acceptez une course pour commencer</p>
-              <p>• Vous ne pouvez avoir qu'une seule course active</p>
+              <p className={user?.isVerified ? 'text-green-600' : 'text-orange-600'}>
+                {user?.isVerified ? '✅' : '❌'} Compte vérifié
+              </p>
+              <p className={user?.driverProfile?.isAvailable ? 'text-green-600' : 'text-orange-600'}>
+                {user?.driverProfile?.isAvailable ? '✅' : '❌'} Disponibilité activée
+              </p>
+              <p className={user?.driverProfile ? 'text-green-600' : 'text-orange-600'}>
+                {user?.driverProfile ? '✅' : '❌'} Profil chauffeur créé
+              </p>
+              <p className="text-gray-600">
+                ℹ️ Type de véhicule correspondant requis
+              </p>
+              <p className="text-gray-600">
+                ℹ️ Une seule course active à la fois
+              </p>
             </div>
           </Card>
         </div>

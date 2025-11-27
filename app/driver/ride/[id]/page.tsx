@@ -55,6 +55,67 @@ export default function DriverRidePage() {
     }
   }, [ride, user, router]);
 
+  // Mise à jour automatique de la position GPS pendant la course
+  useEffect(() => {
+    // Mettre à jour la position uniquement si la course est acceptée ou en cours
+    if (!ride || (ride.status !== 'accepted' && ride.status !== 'in_progress')) {
+      return;
+    }
+
+    console.log('📍 Démarrage du suivi GPS pour la course #' + ride.id);
+
+    let watchId: number | null = null;
+    let lastUpdateTime = 0;
+    const UPDATE_INTERVAL = 10000; // 10 secondes (plus fréquent pendant une course)
+
+    // Fonction pour mettre à jour la position
+    const updatePosition = async (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      const now = Date.now();
+
+      // Limiter les mises à jour à une toutes les 10 secondes
+      if (now - lastUpdateTime < UPDATE_INTERVAL) {
+        return;
+      }
+
+      lastUpdateTime = now;
+
+      try {
+        console.log(`📍 [Course #${ride.id}] Envoi position: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        await api.updateDriverLocation(latitude, longitude);
+        console.log('✅ Position mise à jour');
+      } catch (error) {
+        console.error('❌ Erreur lors de la mise à jour de la position:', error);
+      }
+    };
+
+    // Fonction de gestion d'erreur
+    const handleError = (error: GeolocationPositionError) => {
+      console.error('❌ Erreur de géolocalisation:', error.message);
+    };
+
+    // Démarrer le suivi GPS
+    if (navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        updatePosition,
+        handleError,
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    }
+
+    // Nettoyage
+    return () => {
+      if (watchId !== null) {
+        console.log('🛑 Arrêt du suivi GPS pour la course #' + ride.id);
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [ride?.id, ride?.status]);
+
   // Fonction pour mettre à jour le statut de la course
   const handleUpdateStatus = async (newStatus: string) => {
     if (!ride) return;

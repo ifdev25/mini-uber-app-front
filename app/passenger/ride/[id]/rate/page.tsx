@@ -37,7 +37,16 @@ export default function RateDriverPage() {
 
   // Soumettre la notation
   const handleSubmit = async () => {
-    if (!ride) return;
+    if (!ride || !user) return;
+
+    // Extraire l'ID du chauffeur
+    const driver = typeof ride.driver === 'object' ? ride.driver : null;
+    const driverUser = driver && typeof driver.user === 'object' ? driver.user : null;
+
+    if (!driverUser) {
+      alert('Erreur: Impossible de trouver le chauffeur');
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -45,7 +54,9 @@ export default function RateDriverPage() {
       // Appeler l'API pour enregistrer la notation
       const reviewData = {
         ride: `/api/rides/${ride.id}`,
-        rating,
+        rater: `/api/users/${user.id}`, // Le passager qui note
+        rated: `/api/users/${driverUser.id}`, // Le chauffeur noté
+        score: rating,
         comment: comment.trim() || undefined,
       };
 
