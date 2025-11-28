@@ -86,7 +86,19 @@ export function MapComponent({
   // Mettre à jour le centre et le zoom
   useEffect(() => {
     if (mapRef.current) {
-      mapRef.current.setView(center, zoom);
+      // Vérifier que les coordonnées sont valides avant de mettre à jour
+      if (
+        Array.isArray(center) &&
+        center.length === 2 &&
+        typeof center[0] === 'number' &&
+        typeof center[1] === 'number' &&
+        !isNaN(center[0]) &&
+        !isNaN(center[1])
+      ) {
+        mapRef.current.setView(center, zoom);
+      } else {
+        console.error('❌ MapComponent: coordonnées invalides:', center);
+      }
     }
   }, [center, zoom]);
 
@@ -126,6 +138,19 @@ export function MapComponent({
 
     // Ajouter les nouveaux marqueurs
     markers.forEach(({ position, popup, icon = 'default' }) => {
+      // Vérifier que la position est valide
+      if (
+        !Array.isArray(position) ||
+        position.length !== 2 ||
+        typeof position[0] !== 'number' ||
+        typeof position[1] !== 'number' ||
+        isNaN(position[0]) ||
+        isNaN(position[1])
+      ) {
+        console.warn('⚠️ MapComponent: marqueur ignoré, position invalide:', position);
+        return;
+      }
+
       const marker = L.marker(position, {
         icon: createIcon(icon),
       }).addTo(mapRef.current!);

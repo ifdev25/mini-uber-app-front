@@ -25,13 +25,22 @@ export default function RideTrackingPage() {
   const cancelRide = useCancelRide();
 
   // Polling pour rafraîchir la course toutes les 5 secondes
+  // Seulement quand la course est active (pending, accepted, in_progress)
   useEffect(() => {
+    if (!ride) return;
+
+    // Ne pas faire de polling si la course est terminée ou annulée
+    if (ride.status === 'completed' || ride.status === 'cancelled') {
+      return;
+    }
+
     const interval = setInterval(() => {
+      console.log('🔄 Rafraîchissement de la course...', ride.id);
       refetch();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [refetch]);
+  }, [refetch, ride]);
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -135,12 +144,37 @@ export default function RideTrackingPage() {
   console.log('📍 Total markers:', markers.length, markers);
 
   // Centre de la carte (position du chauffeur ou milieu entre pickup et dropoff)
-  const mapCenter: [number, number] = driver && ride.status !== 'pending'
-    ? [driver.currentLatitude, driver.currentLongitude]
-    : [
-        (ride.pickupLatitude + ride.dropoffLatitude) / 2,
-        (ride.pickupLongitude + ride.dropoffLongitude) / 2,
-      ];
+  // Valeur par défaut : Paris
+  const defaultCenter: [number, number] = [48.8566, 2.3522];
+
+  let mapCenter: [number, number] = defaultCenter;
+
+  // Si le driver existe et a des coordonnées valides, centrer sur lui
+  if (driver && ride.status !== 'pending' &&
+      typeof driver.currentLatitude === 'number' &&
+      typeof driver.currentLongitude === 'number' &&
+      !isNaN(driver.currentLatitude) &&
+      !isNaN(driver.currentLongitude)) {
+    mapCenter = [driver.currentLatitude, driver.currentLongitude];
+    console.log('📍 Centre de la carte: position du chauffeur', mapCenter);
+  }
+  // Sinon, si les coordonnées pickup/dropoff sont valides, centrer entre les deux
+  else if (typeof ride.pickupLatitude === 'number' &&
+           typeof ride.pickupLongitude === 'number' &&
+           typeof ride.dropoffLatitude === 'number' &&
+           typeof ride.dropoffLongitude === 'number' &&
+           !isNaN(ride.pickupLatitude) &&
+           !isNaN(ride.pickupLongitude) &&
+           !isNaN(ride.dropoffLatitude) &&
+           !isNaN(ride.dropoffLongitude)) {
+    mapCenter = [
+      (ride.pickupLatitude + ride.dropoffLatitude) / 2,
+      (ride.pickupLongitude + ride.dropoffLongitude) / 2,
+    ];
+    console.log('📍 Centre de la carte: milieu entre pickup et dropoff', mapCenter);
+  } else {
+    console.warn('⚠️ Coordonnées invalides, utilisation du centre par défaut:', defaultCenter);
+  }
 
   const statusConfig = RIDE_STATUS[ride.status];
   const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];

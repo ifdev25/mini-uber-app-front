@@ -152,10 +152,20 @@ class ApiClient {
           } else {
             errorMessage = error['hydra:description'] || error['hydra:title'] || errorMessage;
           }
+
+          // Améliorer les messages d'erreur spécifiques
+          if (response.status === 403 && errorMessage.includes('Access Denied')) {
+            errorMessage = 'Accès refusé. Veuillez vérifier votre email pour activer votre compte.';
+          }
         } catch (parseError) {
           // Si pas de JSON, utiliser le status text
           console.error('❌ Impossible de parser la réponse JSON:', parseError);
           errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+
+          // Messages spécifiques pour les codes HTTP communs
+          if (response.status === 403) {
+            errorMessage = 'Accès refusé. Veuillez vérifier votre email pour activer votre compte.';
+          }
         }
 
         console.error('❌ Message d\'erreur final:', errorMessage);
