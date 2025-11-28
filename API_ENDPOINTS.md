@@ -703,9 +703,20 @@ GET /api/rides?status=pending&vehicleType=comfort
   },
   "driver": {
     "id": 2,
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "rating": 4.8
+    "user": {
+      "id": 5,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "rating": 4.8,
+      "email": "driver@example.com"
+    },
+    "vehicleModel": "Toyota Prius",
+    "vehicleType": "comfort",
+    "vehicleColor": "Blanc",
+    "licenceNumber": "DRV123456",
+    "currentLatitude": 48.8566,
+    "currentLongitude": 2.3522,
+    "isAvailable": false
   },
   "status": "in_progress",
   "pickupAddress": "10 Rue de Rivoli, 75001 Paris",
@@ -725,6 +736,44 @@ GET /api/rides?status=pending&vehicleType=comfort
   "completedAt": null
 }
 ```
+
+**⚠️ IMPORTANT - Configuration Backend Requise:**
+
+Le backend DOIT renvoyer les relations `passenger` et `driver` comme des **objets complets**, PAS comme des IRIs (strings).
+
+**Problème actuel**: Le backend peut renvoyer `"driver": "/api/drivers/2"` au lieu d'un objet.
+
+**Solution Backend (Symfony/API Platform)**:
+1. Dans l'entité `Ride`, configurer les groupes de normalisation :
+```php
+#[Groups(['ride:read'])]
+#[ORM\ManyToOne(targetEntity: Driver::class)]
+private ?Driver $driver = null;
+```
+
+2. Dans l'entité `Driver`, exposer l'objet `user` :
+```php
+#[Groups(['ride:read', 'driver:read'])]
+#[ORM\OneToOne(targetEntity: User::class)]
+private ?User $user = null;
+```
+
+3. Dans l'entité `User`, exposer les champs nécessaires :
+```php
+#[Groups(['ride:read', 'driver:read', 'passenger:read'])]
+private ?string $firstName = null;
+
+#[Groups(['ride:read', 'driver:read', 'passenger:read'])]
+private ?string $lastName = null;
+```
+
+**Test de validation**:
+```bash
+curl -X GET http://localhost:8000/api/rides/1 \
+  -H "Authorization: Bearer {token}"
+```
+
+La réponse DOIT contenir `driver.user.firstName`, PAS `driver: "/api/drivers/2"`
 
 ---
 
@@ -1018,6 +1067,124 @@ Base URL: `/api/ratings`
 - Les endpoints API Platform utilisent le format JSON-LD par défaut
 - Les relations utilisent des IRIs (ex: `/api/users/1`)
 - Pour les opérations PATCH, utiliser le header `Content-Type: application/merge-patch+json`
+
+### ⚠️ Configuration Backend - Groupes de Normalisation
+
+**CRITIQUE**: Le backend DOIT renvoyer les objets complets pour les relations, PAS des IRIs.
+
+#### Problème à éviter:
+```json
+// ❌ MAUVAIS - Ne pas faire ça
+{
+  "id": 1,
+  "driver": "/api/drivers/2",     // IRI au lieu d'objet
+  "passenger": "/api/users/1"      // IRI au lieu d'objet
+}
+```
+
+#### Configuration correcte:
+```json
+// ✅ BON - Objets complets
+{
+  "id": 1,
+  "driver": {
+    "id": 2,
+    "user": {
+      "id": 5,
+      "firstName": "Jane",
+      "lastName": "Smith"
+    },
+    "vehicleModel": "Toyota Prius"
+  },
+  "passenger": {
+    "id": 1,
+    "firstName": "John",
+    "lastName": "Doe"
+  }
+}
+```
+
+#### Actions requises côté backend:
+
+1. **Entité Ride** (`src/Entity/Ride.php`):
+```php
+#[ApiResource(
+    normalizationContext: ['groups' => ['ride:read']],
+    denormalizationContext: ['groups' => ['ride:write']]
+)]
+class Ride
+{
+    #[Groups(['ride:read', 'ride:write'])]
+    #[ORM\ManyToOne(targetEntity: Driver::class)]
+    private ?Driver $driver = null;
+
+    #[Groups(['ride:read', 'ride:write'])]
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    private ?User $passenger = null;
+}
+```
+
+2. **Entité Driver** (`src/Entity/Driver.php`):
+```php
+#[ApiResource(
+    normalizationContext: ['groups' => ['driver:read']],
+)]
+class Driver
+{
+    #[Groups(['driver:read', 'ride:read'])]  // Important: ajouter 'ride:read'
+    private ?int $id = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    #[ORM\OneToOne(targetEntity: User::class)]
+    private ?User $user = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?string $vehicleModel = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?string $vehicleType = null;
+
+    // ... autres champs avec Groups
+}
+```
+
+3. **Entité User** (`src/Entity/User.php`):
+```php
+class User
+{
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?int $id = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?string $firstName = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?string $lastName = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read'])]
+    private ?float $rating = null;
+}
+```
+
+#### Endpoints concernés:
+- ✅ `GET /api/rides/{id}` - DOIT renvoyer `driver` et `passenger` complets
+- ✅ `GET /api/rides` - DOIT renvoyer `driver` et `passenger` complets dans chaque item
+- ✅ `POST /api/rides/{id}/accept` - DOIT renvoyer `driver` complet après acceptation
+- ✅ `PATCH /api/rides/{id}/status` - DOIT renvoyer `driver` et `passenger` complets
+
+#### Test de validation:
+```bash
+# Tester GET /api/rides/{id}
+curl -X GET http://localhost:8000/api/rides/1 \
+  -H "Authorization: Bearer {token}" | jq '.driver.user.firstName'
+
+# Doit afficher: "Jane" (pas null, pas d'erreur)
+```
+
+#### Si le problème persiste:
+1. Vider le cache Symfony: `php bin/console cache:clear`
+2. Vérifier les groupes dans `config/packages/api_platform.yaml`
+3. Ajouter un listener pour forcer la normalisation complète
 
 ### Temps réel
 - Implémenter des polling ou WebSockets pour les mises à jour en temps réel (position du driver, statut de la course)
