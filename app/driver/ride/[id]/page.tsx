@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRide, useUpdateRideStatus } from '@/hooks/useRides';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
 import { User } from '@/lib/types';
+import { api } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function DriverRidePage() {
   const params = useParams();
@@ -47,7 +49,7 @@ export default function DriverRidePage() {
       if (typeof ride.driver === 'object' && ride.driver) {
         if (typeof ride.driver.user === 'object' && ride.driver.user) {
           if (ride.driver.user.id !== user.id) {
-            alert('Cette course ne vous appartient pas');
+            toast.error('Cette course ne vous appartient pas');
             router.push('/driver/dashboard');
           }
         }
@@ -138,13 +140,15 @@ export default function DriverRidePage() {
 
           // Rediriger vers le dashboard si la course est terminée
           if (newStatus === 'completed') {
-            alert('✅ Course terminée avec succès !');
-            router.push('/driver/dashboard');
+            toast.success('Course terminée avec succès !');
+            setTimeout(() => {
+              router.push('/driver/dashboard');
+            }, 1500);
           }
         },
         onError: (error) => {
           console.error('❌ Erreur:', error);
-          alert(`Impossible de mettre à jour le statut: ${error.message}`);
+          toast.error(`Impossible de mettre à jour le statut: ${error.message}`);
         },
         onSettled: () => {
           setIsUpdatingStatus(false);

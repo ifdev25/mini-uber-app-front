@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRide } from '@/hooks/useRides';
 import { api } from '@/lib/api';
 import { Driver, User } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 export default function RateDriverPage() {
   const params = useParams();
@@ -50,6 +51,8 @@ export default function RateDriverPage() {
 
     setIsSubmitting(true);
 
+    const loadingToastId = toast.loading('Envoi de votre évaluation...');
+
     try {
       // Appeler l'API pour enregistrer la notation
       const reviewData = {
@@ -64,12 +67,17 @@ export default function RateDriverPage() {
       const review = await api.createReview(reviewData);
       console.log('✅ Notation enregistrée:', review);
 
-      alert('Merci pour votre évaluation !');
-      router.push('/passenger/history');
+      toast.success('Merci pour votre évaluation !', { id: loadingToastId });
+
+      // Attendre 1 seconde avant de rediriger pour que l'utilisateur voie le message
+      setTimeout(() => {
+        router.push('/passenger/history');
+      }, 1000);
     } catch (error) {
       console.error('❌ Erreur lors de l\'envoi de la notation:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-      alert(`Erreur lors de l'envoi de la notation:\n${errorMessage}`);
+
+      toast.error(`Erreur lors de l'envoi: ${errorMessage}`, { id: loadingToastId });
     } finally {
       setIsSubmitting(false);
     }

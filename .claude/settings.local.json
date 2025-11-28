@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(docker exec:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Améliorer l''UX avec notifications toast et suivi GPS en temps réel\n\n- Installer et configurer react-hot-toast pour les notifications\n- Améliorer la gestion des erreurs dans lib/api.ts avec messages contextuels\n- Ajouter des notifications toast dans tous les hooks useRides\n- Créer useDriverLocation pour le suivi GPS automatique des drivers\n- Optimiser le polling de la page de suivi de course\n- Créer TEST_RESULTS.md avec rapport complet des tests d''API\n- Créer IMPROVEMENTS.md documentant toutes les améliorations\n\nChangements principaux:\n- ToastProvider ajouté au layout principal\n- Messages d''erreur plus clairs pour la vérification d''email\n- Suivi GPS automatique toutes les 5 secondes pour les drivers\n- Polling optimisé (uniquement pour courses actives)\n- Documentation complète des tests et améliorations\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
