@@ -21,26 +21,8 @@ export default function RideTrackingPage() {
   const router = useRouter();
   const { user, isLoadingUser: userLoading } = useAuth();
   const rideId = parseInt(params.id as string);
-  const { data: ride, isLoading: rideLoading, error, refetch } = useRide(rideId);
+  const { data: ride, isLoading: rideLoading, error } = useRide(rideId);
   const cancelRide = useCancelRide();
-
-  // Polling pour rafraîchir la course toutes les 5 secondes
-  // Seulement quand la course est active (pending, accepted, in_progress)
-  useEffect(() => {
-    if (!ride) return;
-
-    // Ne pas faire de polling si la course est terminée ou annulée
-    if (ride.status === 'completed' || ride.status === 'cancelled') {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      console.log('🔄 Rafraîchissement de la course...', ride.id);
-      refetch();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [refetch, ride]);
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -62,7 +44,10 @@ export default function RideTrackingPage() {
   if (userLoading || rideLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p>Chargement...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement...</p>
+        </div>
       </div>
     );
   }
@@ -83,29 +68,18 @@ export default function RideTrackingPage() {
     );
   }
 
-  // ========== DEBUG: Affichage des données du chauffeur ==========
-  console.log('🔍 DEBUG RIDE:', {
-    rideId: ride.id,
-    status: ride.status,
-    driver: ride.driver,
-    driverType: typeof ride.driver,
-  });
-
-  // Extraire les informations du chauffeur
-  const driver = typeof ride.driver === 'object' ? ride.driver : null;
+  // ========== Extraction des données du chauffeur ==========
+  // Le backend renvoie toujours des objets complets (jamais d'IRIs)
+  const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as Driver : null;
   const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
 
-  if (driver) {
-    console.log('✅ Driver détecté:', {
-      id: driver.id,
-      lat: driver.currentLatitude,
-      lng: driver.currentLongitude,
-      vehicleModel: driver.vehicleModel,
-      user: driverUser,
-    });
-  } else {
-    console.warn('❌ Pas de driver (IRI ou null):', ride.driver);
-  }
+  console.log('🔍 Ride Info:', {
+    rideId: ride.id,
+    status: ride.status,
+    hasDriver: !!driver,
+    hasDriverUser: !!driverUser,
+    driverName: driverUser ? `${driverUser.firstName} ${driverUser.lastName}` : 'N/A',
+  });
 
   // Préparer les marqueurs pour la carte
   const markers: Array<{

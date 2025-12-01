@@ -6,14 +6,202 @@ Documentation complète de tous les endpoints disponibles dans l'API Mini Uber.
 
 ---
 
+## ⚠️ CONFIGURATION CRITIQUE : Objets vs IRIs
+
+### Problème des IRIs
+
+Par défaut, API Platform peut renvoyer des relations sous forme d'**IRIs** (strings) au lieu d'**objets complets** :
+
+```json
+// ❌ MAUVAIS - Ne jamais faire ça
+{
+  "id": 1,
+  "driver": "/api/drivers/2",        // IRI au lieu d'objet
+  "passenger": "/api/users/1"         // IRI au lieu d'objet
+}
+```
+
+Cela **casse le frontend** qui attend des objets complets avec toutes les propriétés :
+
+```json
+// ✅ BON - Format attendu par le frontend
+{
+  "id": 1,
+  "driver": {
+    "id": 2,
+    "user": {
+      "id": 5,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "rating": 4.8
+    },
+    "vehicleModel": "Toyota Prius",
+    "vehicleType": "comfort",
+    "vehicleColor": "Blanc",
+    "currentLatitude": 48.8566,
+    "currentLongitude": 2.3522
+  },
+  "passenger": {
+    "id": 1,
+    "firstName": "John",
+    "lastName": "Doe",
+    "rating": 4.5
+  }
+}
+```
+
+### Configuration Backend Requise (API Platform / Symfony)
+
+Pour **TOUJOURS** renvoyer des objets complets, configurer les **groupes de normalisation** dans chaque entité :
+
+#### 1. Entité `Ride` (src/Entity/Ride.php)
+```php
+use ApiPlatform\Metadata\ApiResource;
+use Symfony\Component\Serializer\Annotation\Groups;
+
+#[ApiResource(
+    normalizationContext: ['groups' => ['ride:read']],
+    denormalizationContext: ['groups' => ['ride:write']]
+)]
+class Ride
+{
+    #[Groups(['ride:read'])]
+    private ?int $id = null;
+
+    #[Groups(['ride:read', 'ride:write'])]
+    #[ORM\ManyToOne(targetEntity: Driver::class)]
+    private ?Driver $driver = null;
+
+    #[Groups(['ride:read', 'ride:write'])]
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    private ?User $passenger = null;
+
+    #[Groups(['ride:read'])]
+    private ?string $status = null;
+
+    // ... autres propriétés avec Groups(['ride:read'])
+}
+```
+
+#### 2. Entité `Driver` (src/Entity/Driver.php)
+```php
+#[ApiResource(
+    normalizationContext: ['groups' => ['driver:read']],
+    denormalizationContext: ['groups' => ['driver:write']]
+)]
+class Driver
+{
+    // ⚠️ IMPORTANT : Ajouter 'ride:read' pour exposer le driver dans les rides
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?int $id = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    #[ORM\OneToOne(targetEntity: User::class)]
+    private ?User $user = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?string $vehicleModel = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?string $vehicleType = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?string $vehicleColor = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?float $currentLatitude = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?float $currentLongitude = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?bool $isAvailable = null;
+
+    #[Groups(['driver:read', 'ride:read'])]
+    private ?string $licenceNumber = null;
+}
+```
+
+#### 3. Entité `User` (src/Entity/User.php)
+```php
+class User
+{
+    // ⚠️ IMPORTANT : Ajouter 'driver:read' et 'ride:read' pour exposer user dans driver et ride
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?int $id = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?string $firstName = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?string $lastName = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?string $email = null;
+
+    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
+    private ?float $rating = null;
+}
+```
+
+### Tests de Validation
+
+**Tester TOUS ces endpoints pour vérifier les objets complets :**
+
+```bash
+# Test 1 : Récupérer une course
+curl -X GET http://localhost:8000/api/rides/1 \
+  -H "Authorization: Bearer {token}" | jq '.driver.user.firstName'
+# Doit afficher: "Jane" (PAS null, PAS d'erreur)
+
+# Test 2 : Accepter une course (driver)
+curl -X POST http://localhost:8000/api/rides/1/accept \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq '.driver.user.firstName'
+# Doit afficher le prénom du driver
+
+# Test 3 : Lister les courses
+curl -X GET http://localhost:8000/api/rides?status=accepted \
+  -H "Authorization: Bearer {token}" | jq '.["hydra:member"][0].driver.user.firstName'
+# Doit afficher le prénom du driver
+
+# Test 4 : Récupérer un driver
+curl -X GET http://localhost:8000/api/drivers/1 \
+  -H "Authorization: Bearer {token}" | jq '.user.firstName'
+# Doit afficher le prénom de l'utilisateur
+```
+
+### En cas de problème
+
+Si les tests échouent et que vous voyez des IRIs :
+
+1. **Vider le cache Symfony**
+   ```bash
+   php bin/console cache:clear
+   ```
+
+2. **Vérifier la configuration API Platform** (`config/packages/api_platform.yaml`)
+   ```yaml
+   api_platform:
+       defaults:
+           normalization_context:
+               skip_null_values: false
+   ```
+
+3. **Forcer la normalisation complète** (créer un Normalizer custom si nécessaire)
+
+---
+
 ## Table des matières
 
-1. [Authentication](#authentication)
-2. [Users](#users)
-3. [Drivers](#drivers)
-4. [Rides](#rides)
-5. [Ratings](#ratings)
-6. [Codes d'erreur](#codes-derreur)
+1. [Configuration Critique](#️-configuration-critique--objets-vs-iris)
+2. [Authentication](#authentication)
+3. [Users](#users)
+4. [Drivers](#drivers)
+5. [Rides](#rides)
+6. [Ratings](#ratings)
+7. [Codes d'erreur](#codes-derreur)
 
 ---
 
@@ -355,6 +543,10 @@ GET /api/users?userType=driver&rating[gte]=4.5
 
 Base URL: `/api/drivers`
 
+**⚠️ IMPORTANT** : Tous les endpoints GET de cette section DOIVENT renvoyer `user` comme **objet complet**, PAS comme une IRI. Voir [Configuration Critique](#️-configuration-critique--objets-vs-iris) pour la configuration backend requise.
+
+---
+
 ### 1. Créer un profil driver
 
 **Endpoint:** `POST /api/drivers`
@@ -572,6 +764,10 @@ GET /api/drivers?isAvailable=true&vehicleType=comfort
 
 Base URL: `/api/rides`
 
+**⚠️ IMPORTANT** : Tous les endpoints de cette section DOIVENT renvoyer `driver` et `passenger` comme **objets complets**, PAS comme des IRIs. Voir [Configuration Critique](#️-configuration-critique--objets-vs-iris) pour la configuration backend requise.
+
+---
+
 ### 1. Demander une course
 
 **Endpoint:** `POST /api/rides`
@@ -669,14 +865,39 @@ GET /api/rides?status=pending&vehicleType=comfort
   "hydra:member": [
     {
       "id": 1,
-      "status": "pending",
+      "passenger": {
+        "id": 1,
+        "firstName": "John",
+        "lastName": "Doe",
+        "rating": 4.5
+      },
+      "driver": {
+        "id": 2,
+        "user": {
+          "id": 5,
+          "firstName": "Jane",
+          "lastName": "Smith",
+          "rating": 4.8
+        },
+        "vehicleModel": "Toyota Prius",
+        "vehicleType": "comfort",
+        "vehicleColor": "Blanc",
+        "currentLatitude": 48.8566,
+        "currentLongitude": 2.3522
+      },
+      "status": "accepted",
       "vehicleType": "comfort",
-      "estimatedPrice": 12.50
+      "estimatedPrice": 12.50,
+      "pickupAddress": "10 Rue de Rivoli, 75001 Paris",
+      "dropoffAddress": "Arc de Triomphe, 75008 Paris",
+      "createdAt": "2024-01-15T14:30:00+00:00"
     }
   ],
   "hydra:totalItems": 1
 }
 ```
+
+**⚠️ IMPORTANT** : Chaque élément du tableau DOIT contenir `driver` et `passenger` comme **objets complets** avec toutes leurs propriétés imbriquées.
 
 ---
 
@@ -737,43 +958,7 @@ GET /api/rides?status=pending&vehicleType=comfort
 }
 ```
 
-**⚠️ IMPORTANT - Configuration Backend Requise:**
-
-Le backend DOIT renvoyer les relations `passenger` et `driver` comme des **objets complets**, PAS comme des IRIs (strings).
-
-**Problème actuel**: Le backend peut renvoyer `"driver": "/api/drivers/2"` au lieu d'un objet.
-
-**Solution Backend (Symfony/API Platform)**:
-1. Dans l'entité `Ride`, configurer les groupes de normalisation :
-```php
-#[Groups(['ride:read'])]
-#[ORM\ManyToOne(targetEntity: Driver::class)]
-private ?Driver $driver = null;
-```
-
-2. Dans l'entité `Driver`, exposer l'objet `user` :
-```php
-#[Groups(['ride:read', 'driver:read'])]
-#[ORM\OneToOne(targetEntity: User::class)]
-private ?User $user = null;
-```
-
-3. Dans l'entité `User`, exposer les champs nécessaires :
-```php
-#[Groups(['ride:read', 'driver:read', 'passenger:read'])]
-private ?string $firstName = null;
-
-#[Groups(['ride:read', 'driver:read', 'passenger:read'])]
-private ?string $lastName = null;
-```
-
-**Test de validation**:
-```bash
-curl -X GET http://localhost:8000/api/rides/1 \
-  -H "Authorization: Bearer {token}"
-```
-
-La réponse DOIT contenir `driver.user.firstName`, PAS `driver: "/api/drivers/2"`
+**⚠️ RAPPEL** : Voir la section [Configuration Critique](#️-configuration-critique--objets-vs-iris) en haut de ce document pour configurer correctement les groupes de normalisation backend.
 
 ---
 
@@ -810,16 +995,49 @@ La réponse DOIT contenir `driver.user.firstName`, PAS `driver: "/api/drivers/2"
 ```json
 {
   "id": 1,
+  "passenger": {
+    "id": 1,
+    "firstName": "John",
+    "lastName": "Doe",
+    "rating": 4.5
+  },
   "driver": {
     "id": 2,
-    "firstName": "Jane",
-    "lastName": "Smith",
-    "rating": 4.8
+    "user": {
+      "id": 5,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "rating": 4.8,
+      "email": "driver@example.com"
+    },
+    "vehicleModel": "Toyota Prius",
+    "vehicleType": "comfort",
+    "vehicleColor": "Blanc",
+    "licenceNumber": "DRV123456",
+    "currentLatitude": 48.8566,
+    "currentLongitude": 2.3522,
+    "isAvailable": false
   },
   "status": "accepted",
+  "pickupAddress": "10 Rue de Rivoli, 75001 Paris",
+  "pickupLatitude": 48.8566,
+  "pickupLongitude": 2.3522,
+  "dropoffAddress": "Arc de Triomphe, 75008 Paris",
+  "dropoffLatitude": 48.8738,
+  "dropoffLongitude": 2.2950,
+  "estimatedDistance": 3.5,
+  "estimatedPrice": 12.50,
+  "estimatedDuration": 15,
+  "vehicleType": "comfort",
+  "createdAt": "2024-01-15T14:30:00+00:00",
   "acceptedAt": "2024-01-15T14:32:00+00:00"
 }
 ```
+
+**⚠️ IMPORTANT** : Cette réponse DOIT contenir :
+- `driver` comme **objet complet** avec tous les champs, pas une IRI
+- `driver.user` comme **objet complet** avec firstName, lastName, rating, etc.
+- `passenger` comme **objet complet**, pas une IRI
 
 **Erreurs possibles:**
 - `403` - Only drivers can accept rides
@@ -1070,121 +1288,14 @@ Base URL: `/api/ratings`
 
 ### ⚠️ Configuration Backend - Groupes de Normalisation
 
-**CRITIQUE**: Le backend DOIT renvoyer les objets complets pour les relations, PAS des IRIs.
+**CRITIQUE**: Voir la section [Configuration Critique](#️-configuration-critique--objets-vs-iris) en haut de ce document pour la configuration complète des groupes de normalisation.
 
-#### Problème à éviter:
-```json
-// ❌ MAUVAIS - Ne pas faire ça
-{
-  "id": 1,
-  "driver": "/api/drivers/2",     // IRI au lieu d'objet
-  "passenger": "/api/users/1"      // IRI au lieu d'objet
-}
-```
-
-#### Configuration correcte:
-```json
-// ✅ BON - Objets complets
-{
-  "id": 1,
-  "driver": {
-    "id": 2,
-    "user": {
-      "id": 5,
-      "firstName": "Jane",
-      "lastName": "Smith"
-    },
-    "vehicleModel": "Toyota Prius"
-  },
-  "passenger": {
-    "id": 1,
-    "firstName": "John",
-    "lastName": "Doe"
-  }
-}
-```
-
-#### Actions requises côté backend:
-
-1. **Entité Ride** (`src/Entity/Ride.php`):
-```php
-#[ApiResource(
-    normalizationContext: ['groups' => ['ride:read']],
-    denormalizationContext: ['groups' => ['ride:write']]
-)]
-class Ride
-{
-    #[Groups(['ride:read', 'ride:write'])]
-    #[ORM\ManyToOne(targetEntity: Driver::class)]
-    private ?Driver $driver = null;
-
-    #[Groups(['ride:read', 'ride:write'])]
-    #[ORM\ManyToOne(targetEntity: User::class)]
-    private ?User $passenger = null;
-}
-```
-
-2. **Entité Driver** (`src/Entity/Driver.php`):
-```php
-#[ApiResource(
-    normalizationContext: ['groups' => ['driver:read']],
-)]
-class Driver
-{
-    #[Groups(['driver:read', 'ride:read'])]  // Important: ajouter 'ride:read'
-    private ?int $id = null;
-
-    #[Groups(['driver:read', 'ride:read'])]
-    #[ORM\OneToOne(targetEntity: User::class)]
-    private ?User $user = null;
-
-    #[Groups(['driver:read', 'ride:read'])]
-    private ?string $vehicleModel = null;
-
-    #[Groups(['driver:read', 'ride:read'])]
-    private ?string $vehicleType = null;
-
-    // ... autres champs avec Groups
-}
-```
-
-3. **Entité User** (`src/Entity/User.php`):
-```php
-class User
-{
-    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
-    private ?int $id = null;
-
-    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
-    private ?string $firstName = null;
-
-    #[Groups(['user:read', 'driver:read', 'ride:read', 'passenger:read'])]
-    private ?string $lastName = null;
-
-    #[Groups(['user:read', 'driver:read', 'ride:read'])]
-    private ?float $rating = null;
-}
-```
-
-#### Endpoints concernés:
-- ✅ `GET /api/rides/{id}` - DOIT renvoyer `driver` et `passenger` complets
-- ✅ `GET /api/rides` - DOIT renvoyer `driver` et `passenger` complets dans chaque item
-- ✅ `POST /api/rides/{id}/accept` - DOIT renvoyer `driver` complet après acceptation
-- ✅ `PATCH /api/rides/{id}/status` - DOIT renvoyer `driver` et `passenger` complets
-
-#### Test de validation:
-```bash
-# Tester GET /api/rides/{id}
-curl -X GET http://localhost:8000/api/rides/1 \
-  -H "Authorization: Bearer {token}" | jq '.driver.user.firstName'
-
-# Doit afficher: "Jane" (pas null, pas d'erreur)
-```
-
-#### Si le problème persiste:
-1. Vider le cache Symfony: `php bin/console cache:clear`
-2. Vérifier les groupes dans `config/packages/api_platform.yaml`
-3. Ajouter un listener pour forcer la normalisation complète
+**Endpoints qui DOIVENT renvoyer des objets complets (PAS des IRIs) :**
+- ✅ `GET /api/rides/{id}` - Renvoie `driver` et `passenger` complets
+- ✅ `GET /api/rides` - Renvoie `driver` et `passenger` complets dans chaque item
+- ✅ `POST /api/rides/{id}/accept` - Renvoie `driver` complet après acceptation
+- ✅ `PATCH /api/rides/{id}/status` - Renvoie `driver` et `passenger` complets
+- ✅ `GET /api/drivers/{id}` - Renvoie `user` complet
 
 ### Temps réel
 - Implémenter des polling ou WebSockets pour les mises à jour en temps réel (position du driver, statut de la course)
@@ -1230,6 +1341,135 @@ curl -X GET http://localhost:8000/api/rides/1 \
 - `in_progress` - En cours
 - `completed` - Terminée
 - `cancelled` - Annulée
+
+---
+
+## ✅ Checklist de Validation Backend
+
+Avant de considérer que le backend est correctement configuré, **TOUS** ces tests doivent passer :
+
+### 1. Test des Groupes de Normalisation
+
+```bash
+# Test 1 : GET /api/rides/{id} renvoie driver.user complet
+curl -X GET http://localhost:8000/api/rides/1 \
+  -H "Authorization: Bearer {token}" | jq '.driver.user'
+
+# ✅ ATTENDU : Objet complet avec firstName, lastName, rating
+# ❌ ÉCHEC : null ou erreur jq
+
+# Test 2 : GET /api/rides/{id} renvoie passenger complet
+curl -X GET http://localhost:8000/api/rides/1 \
+  -H "Authorization: Bearer {token}" | jq '.passenger.firstName'
+
+# ✅ ATTENDU : "John" (ou autre prénom)
+# ❌ ÉCHEC : null ou erreur jq
+
+# Test 3 : POST /api/rides/{id}/accept renvoie driver.user complet
+curl -X POST http://localhost:8000/api/rides/1/accept \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq '.driver.user.firstName'
+
+# ✅ ATTENDU : "Jane" (prénom du driver)
+# ❌ ÉCHEC : null ou erreur jq
+
+# Test 4 : GET /api/drivers/{id} renvoie user complet
+curl -X GET http://localhost:8000/api/drivers/1 \
+  -H "Authorization: Bearer {token}" | jq '.user.firstName'
+
+# ✅ ATTENDU : "Jane" (prénom de l'utilisateur)
+# ❌ ÉCHEC : null ou erreur jq
+
+# Test 5 : GET /api/rides (liste) renvoie des objets complets
+curl -X GET "http://localhost:8000/api/rides?status=accepted" \
+  -H "Authorization: Bearer {token}" | jq '.["hydra:member"][0].driver.user.firstName'
+
+# ✅ ATTENDU : Prénom du driver de la première course
+# ❌ ÉCHEC : null ou erreur jq
+```
+
+### 2. Vérification des IRIs (aucune ne doit apparaître)
+
+```bash
+# Ce test NE DOIT PAS afficher de lignes avec des IRIs
+curl -X GET http://localhost:8000/api/rides/1 \
+  -H "Authorization: Bearer {token}" | grep -E '"/api/(drivers|users)/'
+
+# ✅ ATTENDU : Aucune sortie (grep ne trouve rien)
+# ❌ ÉCHEC : Affiche des lignes comme "driver": "/api/drivers/2"
+```
+
+### 3. Checklist Manuelle
+
+- [ ] **Entité Ride** : Tous les champs ont `#[Groups(['ride:read'])]`
+- [ ] **Entité Ride** : `driver` a `#[Groups(['ride:read', 'ride:write'])]`
+- [ ] **Entité Ride** : `passenger` a `#[Groups(['ride:read', 'ride:write'])]`
+- [ ] **Entité Driver** : Tous les champs principaux ont `#[Groups(['driver:read', 'ride:read'])]`
+- [ ] **Entité Driver** : `user` a `#[Groups(['driver:read', 'ride:read'])]`
+- [ ] **Entité User** : `firstName`, `lastName`, `rating` ont `#[Groups(['user:read', 'driver:read', 'ride:read'])]`
+- [ ] **Cache Symfony** : Vidé avec `php bin/console cache:clear`
+- [ ] **Frontend** : Testé côté passenger (moulinette disparaît quand driver accepte)
+- [ ] **Frontend** : Position du driver visible sur la carte en temps réel
+- [ ] **Frontend** : Aucune erreur console type "Cannot read property 'firstName' of null"
+
+### 4. Tests d'Intégration Frontend-Backend
+
+1. **Créer une course (passenger)**
+   - Vérifier que la course est créée avec `status: "pending"`
+   - Vérifier que `driver: null`
+
+2. **Accepter la course (driver)**
+   - Vérifier que la réponse contient `driver` complet avec `user` complet
+   - Vérifier que `status: "accepted"`
+
+3. **Rafraîchir la page passenger**
+   - La moulinette doit disparaître en **< 3 secondes**
+   - Les infos du chauffeur doivent s'afficher (nom, véhicule, note)
+   - Le marqueur du chauffeur doit apparaître sur la carte
+
+4. **Mettre à jour la position (driver)**
+   - PATCH /api/drivers/location
+   - Vérifier que la carte passenger se met à jour dans les **3 secondes**
+
+### 5. En cas d'échec
+
+Si un test échoue :
+
+1. **Vérifier les entités** (Ride.php, Driver.php, User.php)
+   - Tous les champs ont bien les groupes de normalisation ?
+   - `ride:read` est présent dans Driver et User ?
+
+2. **Vider le cache**
+   ```bash
+   php bin/console cache:clear
+   rm -rf var/cache/*
+   ```
+
+3. **Activer le mode debug**
+   - Vérifier les logs Symfony : `var/log/dev.log`
+   - Chercher "normalization" ou "serializer"
+
+4. **Vérifier la configuration API Platform**
+   ```yaml
+   # config/packages/api_platform.yaml
+   api_platform:
+       defaults:
+           normalization_context:
+               skip_null_values: false
+   ```
+
+5. **Dernière solution** : Créer un Normalizer custom
+   ```php
+   // src/Serializer/RideNormalizer.php
+   class RideNormalizer implements NormalizerInterface
+   {
+       public function normalize($object, $format = null, array $context = [])
+       {
+           // Forcer la normalisation complète de driver et passenger
+       }
+   }
+   ```
 
 ---
 

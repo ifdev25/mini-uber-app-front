@@ -63,12 +63,28 @@ export function useRides(filters?: Record<string, any>) {
 
 /**
  * Hook pour récupérer une course par ID
+ * Active le rafraîchissement automatique pour détecter les changements de statut
+ * Arrête automatiquement le polling quand la course est terminée ou annulée
  */
 export function useRide(rideId: number) {
   return useQuery({
     queryKey: ['rides', rideId],
     queryFn: () => api.getRide(rideId),
     enabled: !!rideId,
+    // Rafraîchir toutes les 3s uniquement si la course est active (pending, accepted, in_progress)
+    refetchInterval: (query) => {
+      const ride = query.state.data as Ride | undefined;
+      // Arrêter le polling si la course est terminée ou annulée
+      if (ride && (ride.status === 'completed' || ride.status === 'cancelled')) {
+        console.log('⏹️ Arrêt du polling pour la course', ride.id, '- Statut:', ride.status);
+        return false; // Arrêter le polling
+      }
+      return 3000; // Continuer le polling toutes les 3 secondes
+    },
+    staleTime: 0, // Considérer les données comme obsolètes immédiatement
+    gcTime: 0, // Ne pas garder les données en cache
+    refetchOnWindowFocus: true, // Rafraîchir quand l'utilisateur revient sur l'onglet
+    retry: 2, // Réessayer 2 fois en cas d'échec
   });
 }
 

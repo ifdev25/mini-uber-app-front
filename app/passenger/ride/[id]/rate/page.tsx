@@ -9,7 +9,6 @@ import { useRide } from '@/hooks/useRides';
 import { api } from '@/lib/api';
 import { Driver, User } from '@/lib/types';
 import toast from 'react-hot-toast';
-import { useQuery } from '@tanstack/react-query';
 
 export default function RateDriverPage() {
   const params = useParams();
@@ -22,28 +21,6 @@ export default function RateDriverPage() {
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Extraire l'ID du driver si c'est une IRI (ex: "/api/drivers/2" -> 2)
-  const getDriverIdFromIRI = (driverIRI: string | Driver | null): number | null => {
-    if (!driverIRI) return null;
-    if (typeof driverIRI === 'string') {
-      const match = driverIRI.match(/\/api\/drivers\/(\d+)/);
-      return match ? parseInt(match[1]) : null;
-    }
-    if (typeof driverIRI === 'object' && 'id' in driverIRI) {
-      return driverIRI.id;
-    }
-    return null;
-  };
-
-  const driverId = ride ? getDriverIdFromIRI(ride.driver) : null;
-
-  // Récupérer les détails du driver si on a seulement l'IRI
-  const { data: driverDetails, isLoading: driverLoading } = useQuery({
-    queryKey: ['driver', driverId],
-    queryFn: () => driverId ? api.getDriver(driverId) : null,
-    enabled: !!driverId && typeof ride?.driver === 'string',
-  });
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -63,9 +40,9 @@ export default function RateDriverPage() {
   const handleSubmit = async () => {
     if (!ride || !user) return;
 
-    // Utiliser driverDetails si disponible, sinon essayer ride.driver
-    const driver = driverDetails || (typeof ride.driver === 'object' ? ride.driver : null);
-    const driverUser = driver && typeof driver.user === 'object' ? driver.user : null;
+    // Le backend renvoie toujours des objets complets (jamais d'IRIs)
+    const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as Driver : null;
+    const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
 
     if (!driver || !driverUser) {
       toast.error('Erreur: Impossible de trouver les informations du chauffeur');
@@ -107,7 +84,7 @@ export default function RateDriverPage() {
   };
 
   // État de chargement
-  if (userLoading || rideLoading || driverLoading) {
+  if (userLoading || rideLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -131,9 +108,8 @@ export default function RateDriverPage() {
     );
   }
 
-  // Utiliser driverDetails si disponible (cas où ride.driver est une IRI),
-  // sinon utiliser ride.driver directement (cas où c'est un objet)
-  const driver = driverDetails || (typeof ride.driver === 'object' ? ride.driver as Driver : null);
+  // Le backend renvoie toujours des objets complets (jamais d'IRIs)
+  const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as Driver : null;
   const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
 
   if (!driver || !driverUser) {
@@ -144,12 +120,9 @@ export default function RateDriverPage() {
           <p className="text-gray-600 mb-4">
             Impossible de charger les informations du chauffeur pour cette course.
           </p>
-          <div className="text-xs text-gray-500 mb-4 p-3 bg-gray-50 rounded">
-            <p><strong>Debug info:</strong></p>
-            <p>ride.driver type: {typeof ride.driver}</p>
-            <p>ride.driver value: {JSON.stringify(ride.driver)}</p>
-            <p>driverDetails: {driverDetails ? 'loaded' : 'null'}</p>
-          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Cette course ne semble pas avoir de chauffeur assigné.
+          </p>
           <Button onClick={() => router.push('/passenger/history')}>
             Retour à l'historique
           </Button>
