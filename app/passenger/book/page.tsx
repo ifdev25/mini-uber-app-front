@@ -42,16 +42,12 @@ export default function BookRidePage() {
   // Rediriger si non connecté ou pas un passager
   useEffect(() => {
     if (!isLoadingUser) {
-      console.log('🔍 User check:', { user, userType: user?.userType, isLoadingUser });
 
       if (!user) {
-        console.log('❌ No user, redirecting to login');
         router.push('/login');
       } else if (user.userType?.toLowerCase() !== 'passenger') {
-        console.log('❌ Not a passenger, userType:', user.userType);
         router.push('/login');
       } else {
-        console.log('✅ User is a valid passenger');
       }
     }
   }, [user, isLoadingUser, router]);
@@ -116,7 +112,6 @@ export default function BookRidePage() {
       vehicleType: selectedVehicle,
     };
 
-    console.log('📤 Envoi des données de réservation:', rideData);
     createRide.mutate(rideData);
   };
 
@@ -197,8 +192,10 @@ export default function BookRidePage() {
   // Marqueurs pour la carte
   const allDrivers = driversData?.['hydra:member'] || driversData?.member || [];
 
-  // Filtrer les chauffeurs à proximité (dans un rayon de 20 km)
-  const PROXIMITY_RADIUS_KM = 20;
+  // Filtrer les chauffeurs à proximité
+  // DÉVELOPPEMENT: Rayon augmenté à 500 km pour permettre les tests hors Paris
+  // PRODUCTION: Remettre à 20 km pour filtrer par proximité réelle
+  const PROXIMITY_RADIUS_KM = 500;
   const userLocation = pickup || (typeof window !== 'undefined' && navigator.geolocation ? null : null);
 
   const nearbyDrivers = userLocation
@@ -214,12 +211,6 @@ export default function BookRidePage() {
     : allDrivers; // Si pas de position utilisateur, afficher tous les drivers
 
   const drivers = nearbyDrivers;
-
-  console.log('🗺️ Préparation des marqueurs de drivers:', {
-    total: allDrivers.length,
-    nearby: nearbyDrivers.length,
-    userLocation: userLocation ? `${userLocation.lat}, ${userLocation.lng}` : 'Non définie'
-  });
 
   const markers = [
     ...(pickup

@@ -64,7 +64,6 @@ export default function DriverRidePage() {
       return;
     }
 
-    console.log('📍 Démarrage du suivi GPS pour la course #' + ride.id);
 
     let watchId: number | null = null;
     let lastUpdateTime = 0;
@@ -83,9 +82,7 @@ export default function DriverRidePage() {
       lastUpdateTime = now;
 
       try {
-        console.log(`📍 [Course #${ride.id}] Envoi position: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
         await api.updateDriverLocation(latitude, longitude);
-        console.log('✅ Position mise à jour');
       } catch (error) {
         console.error('❌ Erreur lors de la mise à jour de la position:', error);
       }
@@ -112,7 +109,6 @@ export default function DriverRidePage() {
     // Nettoyage
     return () => {
       if (watchId !== null) {
-        console.log('🛑 Arrêt du suivi GPS pour la course #' + ride.id);
         navigator.geolocation.clearWatch(watchId);
       }
     };
@@ -135,7 +131,6 @@ export default function DriverRidePage() {
       { rideId: ride.id, status: newStatus },
       {
         onSuccess: (updatedRide) => {
-          console.log('✅ Statut mis à jour:', updatedRide);
           refetch();
 
           // Rediriger vers le dashboard si la course est terminée

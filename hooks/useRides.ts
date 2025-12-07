@@ -17,11 +17,9 @@ export function useCreateRide() {
 
   return useMutation({
     mutationFn: (data: CreateRideData) => {
-      console.log('🚀 Mutation createRide appelée avec:', data);
       return api.createRide(data);
     },
     onSuccess: (ride: Ride) => {
-      console.log('✅ Course créée avec succès:', ride);
       toast.success('Course créée avec succès ! Recherche d\'un chauffeur en cours...');
 
       // Invalider le cache des courses pour rafraîchir la liste
@@ -76,7 +74,6 @@ export function useRide(rideId: number) {
       const ride = query.state.data as Ride | undefined;
       // Arrêter le polling si la course est terminée ou annulée
       if (ride && (ride.status === 'completed' || ride.status === 'cancelled')) {
-        console.log('⏹️ Arrêt du polling pour la course', ride.id, '- Statut:', ride.status);
         return false; // Arrêter le polling
       }
       return 3000; // Continuer le polling toutes les 3 secondes
@@ -147,11 +144,9 @@ export function useCancelRide() {
 
   return useMutation({
     mutationFn: (rideId: number) => {
-      console.log('🔄 Tentative d\'annulation de la course', rideId);
       return api.cancelRide(rideId);
     },
     onSuccess: (ride: Ride) => {
-      console.log('✅ Course annulée avec succès:', ride);
       toast.success('Course annulée avec succès');
 
       // Invalider le cache de la course et de la liste des courses
@@ -189,25 +184,9 @@ export function useAvailableDrivers() {
   return useQuery({
     queryKey: ['drivers'],
     queryFn: async () => {
-      console.log('🔍 Récupération des chauffeurs...');
       try {
         // Récupérer tous les drivers (l'API ne filtre pas correctement par isAvailable)
         const result = await api.getDrivers();
-        console.log('✅ Chauffeurs récupérés:', result);
-
-        // Supporter les deux formats: member et hydra:member
-        const drivers = result['hydra:member'] || result.member || [];
-        console.log('📊 Nombre de chauffeurs:', drivers.length);
-
-        // Afficher les coordonnées de chaque driver pour déboguer
-        drivers.forEach((driver: Driver, index: number) => {
-          console.log(`🚗 Driver ${index + 1}:`, {
-            id: driver.id,
-            lat: driver.currentLatitude,
-            lng: driver.currentLongitude,
-            vehicle: driver.vehicleModel
-          });
-        });
 
         return result;
       } catch (error) {

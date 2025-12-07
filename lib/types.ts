@@ -44,7 +44,7 @@ export interface User {
 // Driver Types
 // ============================================
 
-export type VehicleType = 'standard' | 'comfort' | 'premium' | 'suv';
+export type VehicleType = 'standard' | 'comfort' | 'premium' | 'xl';
 
 export interface Driver {
   '@context'?: string;
@@ -132,6 +132,12 @@ export interface LoginResponse {
   token: string;
 }
 
+export interface RegisterResponse {
+  message: string;
+  user: User;
+  token: string;
+}
+
 // Ride Estimate Request
 export interface EstimateRideData {
   pickupLat: number;
@@ -172,10 +178,9 @@ export interface UpdateDriverAvailabilityData {
 // Create Driver Profile
 export interface CreateDriverData {
   user: string; // IRI "/api/users/{id}"
-  vehiculeModel: string;
-  vehiculeType: VehicleType;
-  vehiculeColor: string;
-  vehiculePlateNumber: string;
+  vehicleModel: string;
+  vehicleType: VehicleType;
+  vehicleColor: string;
   licenceNumber: string;
   currentLatitude: number;
   currentLongitude: number;
@@ -344,10 +349,9 @@ export interface ProfileFormData {
 }
 
 export interface DriverProfileFormData {
-  vehiculeModel: string;
-  vehiculeType: VehicleType;
-  vehiculeColor: string;
-  vehiculePlateNumber: string;
+  vehicleModel: string;
+  vehicleType: VehicleType;
+  vehicleColor: string;
   licenceNumber: string;
 }
 

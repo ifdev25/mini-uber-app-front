@@ -68,18 +68,20 @@ export default function RideTrackingPage() {
     );
   }
 
-  // ========== Extraction des données du chauffeur ==========
-  // Le backend renvoie toujours des objets complets (jamais d'IRIs)
-  const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as Driver : null;
-  const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
+  // ========== Extraction intelligente du driver ==========
+  // Le backend peut renvoyer 2 formats :
+  // 1. driver est un User direct (format actuel du backend)
+  // 2. driver est un Driver avec user imbriqué (format documenté)
 
-  console.log('🔍 Ride Info:', {
-    rideId: ride.id,
-    status: ride.status,
-    hasDriver: !!driver,
-    hasDriverUser: !!driverUser,
-    driverName: driverUser ? `${driverUser.firstName} ${driverUser.lastName}` : 'N/A',
-  });
+  const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as any : null;
+
+  // Si driver a une propriété 'user', c'est un Driver complet
+  // Sinon, c'est un User direct
+  const driverUser: User | null = driver
+    ? (driver.user && typeof driver.user === 'object'
+        ? driver.user as User
+        : driver as User) // driver EST l'user
+    : null;
 
   // Préparer les marqueurs pour la carte
   const markers: Array<{
@@ -101,7 +103,6 @@ export default function RideTrackingPage() {
 
   // Ajouter le marqueur du chauffeur si disponible
   if (driver && ride.status !== 'pending' && ride.status !== 'cancelled') {
-    console.log('🚗 Ajout du marqueur chauffeur à la position:', [driver.currentLatitude, driver.currentLongitude]);
     markers.push({
       position: [driver.currentLatitude, driver.currentLongitude] as [number, number],
       popup: `Chauffeur: ${driverUser?.firstName || 'Chauffeur'}`,
@@ -115,7 +116,6 @@ export default function RideTrackingPage() {
     });
   }
 
-  console.log('📍 Total markers:', markers.length, markers);
 
   // Centre de la carte (position du chauffeur ou milieu entre pickup et dropoff)
   // Valeur par défaut : Paris
@@ -130,7 +130,6 @@ export default function RideTrackingPage() {
       !isNaN(driver.currentLatitude) &&
       !isNaN(driver.currentLongitude)) {
     mapCenter = [driver.currentLatitude, driver.currentLongitude];
-    console.log('📍 Centre de la carte: position du chauffeur', mapCenter);
   }
   // Sinon, si les coordonnées pickup/dropoff sont valides, centrer entre les deux
   else if (typeof ride.pickupLatitude === 'number' &&
@@ -145,7 +144,6 @@ export default function RideTrackingPage() {
       (ride.pickupLatitude + ride.dropoffLatitude) / 2,
       (ride.pickupLongitude + ride.dropoffLongitude) / 2,
     ];
-    console.log('📍 Centre de la carte: milieu entre pickup et dropoff', mapCenter);
   } else {
     console.warn('⚠️ Coordonnées invalides, utilisation du centre par défaut:', defaultCenter);
   }
@@ -155,11 +153,17 @@ export default function RideTrackingPage() {
 
   return (
     <div className="container mx-auto p-4 max-w-7xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Suivi de course #{ride.id}</h1>
-        <p className="text-gray-600 mt-2">
-          {statusConfig.icon} {statusConfig.label} - {statusConfig.description}
-        </p>
+      {/* Header */}
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Suivi de course #{ride.id}</h1>
+          <p className="text-gray-600 mt-2">
+            {statusConfig.icon} {statusConfig.label} - {statusConfig.description}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => router.push('/passenger/history')}>
+          ← Retour
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -210,15 +214,17 @@ export default function RideTrackingPage() {
                   <span className="font-medium">Nom:</span> {driverUser.firstName}{' '}
                   {driverUser.lastName}
                 </p>
-                {driver.rating && (
+                {driverUser.rating && (
                   <p>
-                    <span className="font-medium">Note:</span> ⭐ {driver.rating.toFixed(1)}
+                    <span className="font-medium">Note:</span> ⭐ {driverUser.rating.toFixed(1)}
                   </p>
                 )}
-                <p>
-                  <span className="font-medium">Véhicule:</span>{' '}
-                  {vehicleConfig.icon} {driver.vehicleModel} ({driver.vehicleColor})
-                </p>
+                {driver.vehicleModel && (
+                  <p>
+                    <span className="font-medium">Véhicule:</span>{' '}
+                    {vehicleConfig.icon} {driver.vehicleModel} ({driver.vehicleColor})
+                  </p>
+                )}
                 {driver.licenceNumber && (
                   <p>
                     <span className="font-medium">Licence:</span> {driver.licenceNumber}

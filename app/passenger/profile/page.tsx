@@ -100,11 +100,17 @@ export default function ProfilePage() {
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Mon Profil</h1>
-        <p className="text-gray-600 mt-2">
-          Gérez vos informations personnelles
-        </p>
+      {/* Header */}
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Mon Profil</h1>
+          <p className="text-gray-600 mt-2">
+            Gérez vos informations personnelles
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => router.push('/passenger/book')}>
+          ← Retour
+        </Button>
       </div>
 
       <div className="grid gap-6">

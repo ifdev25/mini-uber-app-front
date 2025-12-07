@@ -40,9 +40,13 @@ export default function RateDriverPage() {
   const handleSubmit = async () => {
     if (!ride || !user) return;
 
-    // Le backend renvoie toujours des objets complets (jamais d'IRIs)
-    const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as Driver : null;
-    const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
+    // Extraction intelligente du driver (peut être User direct ou Driver avec user)
+    const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as any : null;
+    const driverUser: User | null = driver
+      ? (driver.user && typeof driver.user === 'object'
+          ? driver.user as User
+          : driver as User) // driver EST l'user
+      : null;
 
     if (!driver || !driverUser) {
       toast.error('Erreur: Impossible de trouver les informations du chauffeur');
@@ -63,9 +67,7 @@ export default function RateDriverPage() {
         comment: comment.trim() || undefined,
       };
 
-      console.log('📝 Envoi de la notation:', reviewData);
       const review = await api.createReview(reviewData);
-      console.log('✅ Notation enregistrée:', review);
 
       toast.success('Merci pour votre évaluation !', { id: loadingToastId });
 
@@ -108,9 +110,20 @@ export default function RateDriverPage() {
     );
   }
 
-  // Le backend renvoie toujours des objets complets (jamais d'IRIs)
-  const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as Driver : null;
-  const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
+  // ========== Extraction intelligente du driver ==========
+  // Le backend peut renvoyer 2 formats :
+  // 1. driver est un User direct (format actuel)
+  // 2. driver est un Driver avec user imbriqué (format documenté)
+
+  const driver = ride.driver && typeof ride.driver === 'object' ? ride.driver as any : null;
+
+  // Si driver a une propriété 'user', c'est un Driver complet
+  // Sinon, c'est un User direct
+  const driverUser: User | null = driver
+    ? (driver.user && typeof driver.user === 'object'
+        ? driver.user as User
+        : driver as User) // driver EST l'user
+    : null;
 
   if (!driver || !driverUser) {
     return (
@@ -120,9 +133,28 @@ export default function RateDriverPage() {
           <p className="text-gray-600 mb-4">
             Impossible de charger les informations du chauffeur pour cette course.
           </p>
-          <p className="text-sm text-gray-500 mb-4">
-            Cette course ne semble pas avoir de chauffeur assigné.
-          </p>
+
+          {/* Debug info pour aider au diagnostic */}
+          <div className="bg-gray-100 p-4 rounded mb-4 text-xs font-mono">
+            <p className="font-bold mb-2">🔍 Debug Info:</p>
+            <p>• Status de la course: {ride.status}</p>
+            <p>• ride.driver est null: {ride.driver === null ? 'OUI' : 'NON'}</p>
+            <p>• ride.driver est objet: {ride.driver && typeof ride.driver === 'object' ? 'OUI' : 'NON'}</p>
+            {driver && (
+              <>
+                <p>• driver.id: {driver.id}</p>
+                <p>• driver.user existe: {driver.user ? 'OUI' : 'NON'}</p>
+                <p>• driver.user type: {typeof driver.user}</p>
+              </>
+            )}
+            <details className="mt-2">
+              <summary className="cursor-pointer text-blue-600">Voir données brutes</summary>
+              <pre className="mt-2 text-xs overflow-auto max-h-40">
+                {JSON.stringify(ride.driver, null, 2)}
+              </pre>
+            </details>
+          </div>
+
           <Button onClick={() => router.push('/passenger/history')}>
             Retour à l'historique
           </Button>
@@ -133,6 +165,15 @@ export default function RateDriverPage() {
 
   return (
     <div className="container mx-auto p-4 max-w-2xl">
+      {/* Bouton retour */}
+      <Button
+        variant="ghost"
+        onClick={() => router.push('/passenger/history')}
+        className="mb-4"
+      >
+        ← Retour à l'historique
+      </Button>
+
       <Card className="p-6">
         <h1 className="text-2xl font-bold mb-2">Noter le chauffeur</h1>
         <p className="text-gray-600 mb-6">
@@ -149,13 +190,16 @@ export default function RateDriverPage() {
               <p className="font-semibold text-lg">
                 {driverUser.firstName} {driverUser.lastName}
               </p>
-              <p className="text-sm text-gray-600">
-                {driver.vehicleModel}
-                {driver.licenceNumber && ` - ${driver.licenceNumber}`}
-              </p>
-              {driver.rating && driver.totalRides && (
+              {driver.vehicleModel && (
                 <p className="text-sm text-gray-600">
-                  ⭐ {driver.rating.toFixed(1)} ({driver.totalRides} courses)
+                  {driver.vehicleModel}
+                  {driver.licenceNumber && ` - ${driver.licenceNumber}`}
+                </p>
+              )}
+              {driverUser.rating && (
+                <p className="text-sm text-gray-600">
+                  ⭐ {driverUser.rating.toFixed(1)}
+                  {driver.totalRides && ` (${driver.totalRides} courses)`}
                 </p>
               )}
             </div>

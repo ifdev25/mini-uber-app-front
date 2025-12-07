@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useRides } from '@/hooks/useRides';
+import { useMyRides } from '@/hooks/useMyRides';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
 import { Ride, RideStatus, User } from '@/lib/types';
 import toast from 'react-hot-toast';
@@ -15,23 +15,14 @@ export default function DriverHistoryPage() {
   const { user, isLoadingUser } = useAuth();
   const [statusFilter, setStatusFilter] = useState<RideStatus | 'all'>('all');
 
-  // Construire les filtres pour l'API selon API_ENDPOINTS.md
-  const filters: Record<string, any> = {};
+  // ✅ Utiliser le nouveau hook qui appelle /api/my/rides
+  // Cet endpoint filtre automatiquement par l'utilisateur connecté via le JWT
+  const { rides: allRides, isLoading: ridesLoading } = useMyRides();
 
-  // Filtrer par driver ID (pas user ID)
-  if (user?.driverProfile?.id) {
-    filters.driver = user.driverProfile.id;
-  }
-
-  // Filtrer par statut si sélectionné
-  if (statusFilter !== 'all') {
-    filters.status = statusFilter;
-  }
-
-  // Trier par date décroissante
-  filters['order[createdAt]'] = 'desc';
-
-  const { data: ridesCollection, isLoading: ridesLoading } = useRides(filters);
+  // Filtrer les courses par statut côté client
+  const rides = statusFilter === 'all'
+    ? allRides
+    : allRides.filter(r => r.status === statusFilter);
 
   // Rediriger si non connecté ou pas un driver
   useEffect(() => {
@@ -42,13 +33,11 @@ export default function DriverHistoryPage() {
       } else if (user.userType?.toLowerCase() !== 'driver') {
         toast.error('Cette page est réservée aux chauffeurs');
         router.push('/dashboard');
-      } else if (!user.driverProfile) {
-        toast.error('Vous devez créer un profil driver');
-        router.push('/driver/create-profile');
       }
     }
   }, [user, isLoadingUser, router]);
 
+  // Afficher un loader pendant le chargement
   if (isLoadingUser || ridesLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -59,8 +48,6 @@ export default function DriverHistoryPage() {
       </div>
     );
   }
-
-  const rides = ridesCollection?.['hydra:member'] || [];
 
   // Fonction pour formater la date
   const formatDate = (dateString: string) => {
@@ -117,26 +104,39 @@ export default function DriverHistoryPage() {
             <span className="text-green-600 mt-1">📍</span>
             <div className="flex-1">
               <p className="text-sm text-gray-500">Départ</p>
-              <p className="text-sm font-medium truncate">{ride.pickupAddress}</p>
+              <p className="text-sm font-medium truncate">
+                {ride.pickupAddress || <span className="text-red-500">Non disponible</span>}
+              </p>
             </div>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-red-600 mt-1">📍</span>
             <div className="flex-1">
               <p className="text-sm text-gray-500">Arrivée</p>
-              <p className="text-sm font-medium truncate">{ride.dropoffAddress}</p>
+              <p className="text-sm font-medium truncate">
+                {ride.dropoffAddress || <span className="text-red-500">Non disponible</span>}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="flex justify-between items-center pt-3 border-t">
           <div className="flex items-center gap-3 text-sm text-gray-600">
-            <span>{vehicleConfig.icon} {vehicleConfig.label}</span>
-            <span>{ride.estimatedDistance.toFixed(1)} km</span>
-            <span>{ride.estimatedDuration} min</span>
+            <span>{vehicleConfig?.icon || '🚗'} {vehicleConfig?.label || 'Standard'}</span>
+            <span>
+              {ride.estimatedDistance ? `${ride.estimatedDistance.toFixed(1)} km` : <span className="text-red-500">? km</span>}
+            </span>
+            <span>
+              {ride.estimatedDuration ? `${ride.estimatedDuration} min` : <span className="text-red-500">? min</span>}
+            </span>
           </div>
           <div className="text-lg font-bold text-green-600">
-            {ride.finalPrice ? ride.finalPrice.toFixed(2) : ride.estimatedPrice.toFixed(2)} €
+            {ride.finalPrice
+              ? `${ride.finalPrice.toFixed(2)} €`
+              : ride.estimatedPrice
+              ? `${ride.estimatedPrice.toFixed(2)} €`
+              : <span className="text-red-500">? €</span>
+            }
           </div>
         </div>
 
@@ -162,7 +162,7 @@ export default function DriverHistoryPage() {
   const averageRating = user?.rating || 0;
 
   return (
-    <div className="container mx-auto p-4 max-w-6xl">
+    <div className="container mx-auto p-4 max-w-7xl">
       {/* Header */}
       <div className="mb-6 flex justify-between items-center">
         <div>
@@ -177,7 +177,7 @@ export default function DriverHistoryPage() {
       </div>
 
       {/* Statistiques globales */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses totales</p>
           <p className="text-3xl font-bold text-blue-600">{rides.length}</p>

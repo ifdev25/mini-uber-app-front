@@ -1,321 +1,195 @@
 # 🚗 Mini Uber - Frontend
 
-Application web moderne de réservation de courses VTC (type Uber), construite avec **Next.js 16**, **React 19**, et **TypeScript**.
-
-## 📋 Table des matières
-
-- [Aperçu](#aperçu)
-- [Fonctionnalités](#fonctionnalités)
-- [Technologies](#technologies)
-- [Prérequis](#prérequis)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Utilisation](#utilisation)
-- [Structure du projet](#structure-du-projet)
-- [API Backend](#api-backend)
-- [Contributeurs](#contributeurs)
-
----
+Application web de réservation de courses VTC (type Uber) construite avec Next.js 16, React 19 et TypeScript.
 
 ## 🎯 Aperçu
 
-**Mini Uber** est une application complète de réservation de courses VTC avec suivi en temps réel. Le frontend offre une interface intuitive pour les passagers et les chauffeurs avec :
+Application complète de VTC avec suivi en temps réel pour passagers et chauffeurs.
 
-- **Passagers** : Réservation de courses, suivi en temps réel, historique
-- **Chauffeurs** : Gestion des courses, disponibilité, localisation GPS
+**Passagers** : Réservation de courses, suivi GPS en temps réel, historique et notation des chauffeurs
+
+**Chauffeurs** : Gestion des courses, disponibilité, localisation GPS automatique
 
 ## ✨ Fonctionnalités
 
-### Pour les passagers 👤
-- ✅ Inscription et connexion sécurisées (JWT)
-- ✅ Vérification d'email avec code à 6 chiffres
-- ✅ Recherche d'adresse avec autocomplétion (Nominatim OpenStreetMap)
-- ✅ Calcul automatique de distance et prix
-- ✅ Sélection du type de véhicule (Standard, Confort, Premium, SUV)
-- ✅ Affichage des chauffeurs disponibles à proximité (rayon de 20 km)
-- ✅ Suivi de course en temps réel sur carte interactive
-- ✅ Historique des courses avec filtres et statuts
-- ✅ Annulation de course (statut pending uniquement)
+### Passagers
+- Inscription/connexion sécurisée avec vérification email (code à 6 chiffres)
+- Recherche d'adresse avec autocomplétion (OpenStreetMap)
+- Calcul automatique de distance et prix
+- Sélection du type de véhicule (Standard, Confort, Premium, SUV)
+- Chauffeurs disponibles à proximité (rayon 20 km)
+- Suivi de course en temps réel sur carte interactive
+- Historique des courses avec filtres
+- Notation des chauffeurs après chaque course
 
-### Pour les chauffeurs 🚗
-- ✅ Tableau de bord avec courses en attente
-- ✅ Acceptation/refus de courses
-- ✅ Mise à jour de disponibilité
-- ✅ Gestion des statuts de course (en route, en cours, terminée)
-- ✅ Vue de la course active avec informations passager
+### Chauffeurs
+- Création de profil driver avec véhicule
+- Tableau de bord avec courses en attente
+- Acceptation/refus de courses
+- Mise à jour de disponibilité
+- Gestion des statuts (en route, en cours, terminée)
+- Géolocalisation automatique
+- Historique des courses et statistiques
 
-### Fonctionnalités techniques 🔧
-- 🗺️ **Cartes interactives** avec Leaflet/React-Leaflet
-- 📍 **Géolocalisation** en temps réel
-- ⚡ **Polling automatique** pour le suivi des courses (5s)
-- 🔄 **React Query** pour la gestion du cache et des états
-- 📱 **Design responsive** avec Tailwind CSS 4
-- 🎨 **Composants UI** avec Radix UI et shadcn/ui
-- 🔐 **Authentification JWT** avec stockage sécurisé
+### Technique
+- Cartes interactives (Leaflet/React-Leaflet)
+- Géolocalisation temps réel
+- Polling automatique (3s pour suivi de course)
+- React Query pour cache et états
+- Design responsive (Tailwind CSS 4)
+- Composants UI (Radix UI/shadcn)
+- Authentification JWT
 
----
+## 🛠️ Stack Technique
 
-## 🛠️ Technologies
+- **Next.js 16** (App Router) + **React 19** + **TypeScript 5**
+- **TanStack React Query** - Gestion cache/requêtes
+- **Tailwind CSS 4** + **Radix UI** - Styling/composants
+- **Leaflet** + **React-Leaflet** - Cartographie
+- **React Hook Form** + **Zod** - Formulaires/validation
 
-### Core
-- **Next.js 16** - Framework React avec App Router
-- **React 19** - Bibliothèque UI
-- **TypeScript 5** - Typage statique
-- **Tailwind CSS 4** - Styling utilitaire
+## 📦 Installation
 
-### State Management & Data Fetching
-- **TanStack React Query** - Gestion du cache et des requêtes
-- **React Hook Form** - Gestion des formulaires
-- **Zod** - Validation de schémas
+### Prérequis
+- Node.js >= 18.x
+- Backend Mini Uber (Symfony) sur `http://localhost:8080`
 
-### UI Components
-- **Radix UI** - Composants accessibles
-- **Lucide React** - Icônes
-- **class-variance-authority** - Gestion des variants CSS
-
-### Cartographie
-- **Leaflet** - Bibliothèque de cartes interactive
-- **React-Leaflet** - Intégration React pour Leaflet
-- **OpenStreetMap** - Données cartographiques
-
----
-
-## 📦 Prérequis
-
-- **Node.js** >= 18.x
-- **npm** ou **yarn** ou **pnpm**
-- **Backend Mini Uber** (API Symfony) démarré sur `http://localhost:8000`
-
----
-
-## 🚀 Installation
-
-### 1. Cloner le repository
+### Setup
 
 ```bash
+# 1. Cloner le repo
 git clone https://github.com/votre-username/mini-uber-app-front.git
 cd mini-uber-app-front
-```
 
-### 2. Installer les dépendances
-
-```bash
+# 2. Installer les dépendances
 npm install
-# ou
-yarn install
-# ou
-pnpm install
-```
 
-### 3. Configurer les variables d'environnement
+# 3. Configurer l'environnement
+# Créer .env.local avec :
+NEXT_PUBLIC_API_URL=http://localhost:8080
 
-Créez un fichier `.env.local` à la racine du projet :
-
-```env
-# API Backend URL
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Mercure Hub URL (optionnel - pour temps réel)
-NEXT_PUBLIC_MERCURE_URL=http://localhost:3000/.well-known/mercure
-```
-
-### 4. Démarrer le serveur de développement
-
-```bash
+# 4. Démarrer le serveur
 npm run dev
 ```
 
 L'application sera disponible sur [http://localhost:3000](http://localhost:3000)
 
----
-
 ## ⚙️ Configuration
 
-### Configuration des constantes
+### Constantes importantes (lib/constants.ts)
 
-Modifiez `lib/constants.ts` pour personnaliser :
-
-#### Centre de la carte par défaut
 ```typescript
-export const MAP_CONFIG = {
-  DEFAULT_CENTER: {
-    lat: 36.365,   // Constantine, Algérie
-    lng: 6.6147,
-  },
-  DEFAULT_ZOOM: 13,
-};
+// Centre de la carte par défaut
+MAP_CONFIG.DEFAULT_CENTER = { lat: 36.365, lng: 6.6147 } // Constantine
+
+// Tarifs des véhicules
+VEHICLE_TYPES = {
+  standard: { pricePerKm: 1.00, basePrice: 2.50 },
+  comfort: { pricePerKm: 1.20, basePrice: 3.00 },
+  premium: { pricePerKm: 1.50, basePrice: 4.00 },
+  suv: { pricePerKm: 1.80, basePrice: 5.00 }
+}
 ```
 
-#### Rayon de proximité des chauffeurs
-Dans `app/passenger/book/page.tsx` :
+### Rayon de proximité (app/passenger/book/page.tsx)
 ```typescript
-const PROXIMITY_RADIUS_KM = 20; // 20 km par défaut
+const PROXIMITY_RADIUS_KM = 20; // Chauffeurs à moins de 20 km
 ```
 
-#### Tarifs des véhicules
-Dans `lib/constants.ts` :
-```typescript
-export const VEHICLE_TYPES = {
-  standard: {
-    pricePerKm: 1.00,
-    basePrice: 2.50,
-  },
-  // ...
-};
-```
-
----
-
-## 📖 Utilisation
-
-### Inscription
-
-1. Accédez à `/register`
-2. Remplissez le formulaire (email, mot de passe, nom, prénom)
-3. Sélectionnez votre type de compte (Passager ou Chauffeur)
-4. Validez votre email avec le code à 6 chiffres reçu
-
-### Réserver une course (Passager)
-
-1. Connectez-vous avec vos identifiants
-2. Allez sur `/passenger/book`
-3. Définissez votre point de départ (clic carte ou recherche)
-4. Définissez votre point d'arrivée
-5. Sélectionnez le type de véhicule
-6. Vérifiez l'estimation (distance, durée, prix)
-7. Cliquez sur "Réserver cette course"
-8. Suivez votre course en temps réel
-
-### Accepter une course (Chauffeur)
-
-1. Connectez-vous en tant que chauffeur
-2. Allez sur `/driver/dashboard`
-3. Consultez les courses en attente
-4. Cliquez sur "Voir les détails"
-5. Acceptez la course
-6. Mettez à jour le statut au fur et à mesure
-
----
-
-## 📁 Structure du projet
+## 📁 Structure
 
 ```
-mini-uber-app-front/
-├── app/                      # Pages Next.js (App Router)
-│   ├── dashboard/            # Tableau de bord commun
-│   ├── driver/               # Pages chauffeur
-│   │   ├── dashboard/        # Dashboard chauffeur
-│   │   └── ride/[id]/        # Détails course chauffeur
-│   ├── login/                # Page de connexion
-│   ├── passenger/            # Pages passager
-│   │   ├── book/             # Réservation de course
-│   │   ├── history/          # Historique des courses
-│   │   └── ride/[id]/        # Suivi de course
-│   ├── register/             # Page d'inscription
-│   └── test-api/             # Page de test API
-├── components/               # Composants réutilisables
-│   ├── map/                  # Composants de carte
-│   │   ├── AddressAutocomplete.tsx
-│   │   ├── MapComponent.tsx
-│   │   └── index.ts
-│   └── ui/                   # Composants UI (shadcn)
-├── hooks/                    # Custom hooks React
-│   ├── useAuth.ts            # Hook d'authentification
-│   └── useRides.ts           # Hooks pour les courses
-├── lib/                      # Utilitaires et configuration
-│   ├── api.ts                # Client API
-│   ├── constants.ts          # Constantes globales
-│   └── types.ts              # Types TypeScript
-├── public/                   # Fichiers statiques
-├── .env.local                # Variables d'environnement
-├── API_ENDPOINTS.md          # Documentation des endpoints API
-├── instructions.md           # Instructions de développement
-└── README.md                 # Ce fichier
+app/
+├── dashboard/          # Dashboard commun
+├── driver/             # Pages chauffeur
+│   ├── create-profile/ # Création profil driver
+│   ├── dashboard/      # Dashboard chauffeur
+│   ├── history/        # Historique courses
+│   └── ride/[id]/      # Détails course
+├── passenger/          # Pages passager
+│   ├── book/           # Réservation
+│   ├── history/        # Historique
+│   ├── profile/        # Profil
+│   └── ride/[id]/      # Suivi + notation
+├── login/              # Connexion
+└── register/           # Inscription
+
+components/
+├── map/                # Composants carte
+└── ui/                 # Composants shadcn
+
+hooks/
+├── useAuth.ts          # Authentification
+├── useRides.ts         # Courses
+├── useMyRides.ts       # Historique utilisateur
+├── useRatings.ts       # Notations
+└── useDriverLocation.ts # Géolocalisation driver
+
+lib/
+├── api.ts              # Client API
+├── constants.ts        # Constantes
+└── types.ts            # Types TypeScript
 ```
 
----
-
-## 🔌 API Backend
-
-Le frontend communique avec l'API Symfony via les endpoints suivants :
+## 🔌 API Endpoints
 
 ### Authentication
 - `POST /api/login` - Connexion
-- `POST /api/users` - Inscription
+- `POST /api/register` - Inscription
 - `GET /api/me` - Profil utilisateur
 
 ### Courses
-- `POST /api/rides` - Créer une course
-- `GET /api/rides` - Liste des courses
-- `GET /api/rides/{id}` - Détails d'une course
-- `POST /api/rides/{id}/accept` - Accepter une course
-- `PATCH /api/rides/{id}/status` - Modifier le statut
+- `POST /api/rides` - Créer course
+- `GET /api/rides` - Liste courses (filtres: passenger, driver, status)
+- `GET /api/rides/{id}` - Détails course
+- `GET /api/my/rides` - Mes courses (auto-filtré par JWT)
+- `POST /api/rides/{id}/accept` - Accepter course
+- `PATCH /api/rides/{id}/status` - Modifier statut
 
 ### Chauffeurs
-- `GET /api/drivers` - Liste des chauffeurs
-- `GET /api/drivers/{id}` - Détails d'un chauffeur
-- `PATCH /api/drivers/location` - Mettre à jour la position
-- `PATCH /api/drivers/availability` - Modifier la disponibilité
+- `POST /api/drivers` - Créer profil driver
+- `GET /api/drivers` - Liste chauffeurs
+- `GET /api/drivers/{id}` - Détails chauffeur
+- `PATCH /api/drivers/location` - Mettre à jour position
+- `PATCH /api/drivers/availability` - Modifier disponibilité
 
-Consultez [API_ENDPOINTS.md](./API_ENDPOINTS.md) pour la documentation complète.
+### Notations
+- `POST /api/ratings` - Créer notation
+- `GET /api/ratings` - Liste notations
 
----
+Documentation complète : [API_ENDPOINTS.md](./API_ENDPOINTS.md)
 
-## 🧪 Scripts disponibles
+## 🧪 Scripts
 
 ```bash
-# Développement
-npm run dev        # Démarrer le serveur de dev (port 3000)
-
-# Production
-npm run build      # Build de production
-npm start          # Démarrer le serveur de production
-
-# Qualité du code
-npm run lint       # Linter ESLint
+npm run dev    # Développement (port 3000)
+npm run build  # Build production
+npm start      # Serveur production
+npm run lint   # Linter ESLint
 ```
 
----
+## 🎯 Workflow Utilisateur
 
-## 🌟 Fonctionnalités à venir
+### Passager
+1. Inscription → Vérification email → Connexion
+2. Réservation : Saisie départ/arrivée → Choix véhicule → Confirmation
+3. Suivi temps réel de la course sur carte
+4. Notation du chauffeur après la course
 
-- [ ] Notifications push en temps réel (WebSocket/Mercure)
-- [ ] Système de paiement intégré
-- [ ] Chat entre passager et chauffeur
-- [ ] Historique détaillé avec factures PDF
-- [ ] Mode sombre
-- [ ] Support multilingue (i18n)
-- [ ] Application mobile (React Native)
+### Chauffeur
+1. Inscription → Vérification email → Création profil driver
+2. Activation disponibilité → Réception courses
+3. Acceptation course → Mise à jour statuts
+4. Géolocalisation automatique pendant la course
 
----
+## 🤝 Contributeur
 
-## 🤝 Contributeurs
-
-- **IFWEBDEV** - Développeur principal
-
----
+**IFWEBDEV** - Développeur principal
 
 ## 📄 Licence
 
-Ce projet est sous licence MIT.
+MIT License
 
 ---
 
-## 🐛 Rapport de bugs
-
-Si vous rencontrez un problème, veuillez créer une issue sur GitHub avec :
-- Description du problème
-- Étapes pour reproduire
-- Captures d'écran si applicable
-- Environnement (OS, navigateur, version Node.js)
-
----
-
-## 💡 Support
-
-Pour toute question ou suggestion :
-- 💬 GitHub Issues : [Issues](https://github.com/votre-username/mini-uber-app-front/issues)
-
----
-
-**Made with ❤️ using Next.js and React**
+**Made with Next.js & React**

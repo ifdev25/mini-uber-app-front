@@ -16,9 +16,20 @@ export default function RideHistoryPage() {
 
   // Construire les filtres pour l'API
   const filters: Record<string, any> = {};
+
+  // IMPORTANT: Filtrer par l'utilisateur connecté (passager)
+  // Format API Platform: passenger={id}
+  if (user?.id) {
+    filters.passenger = user.id;
+  }
+
+  // Filtrer par statut si sélectionné
   if (statusFilter !== 'all') {
     filters.status = statusFilter;
   }
+
+  // Trier par date décroissante (plus récentes en premier)
+  filters['order[createdAt]'] = 'desc';
 
   const { data: ridesCollection, isLoading: ridesLoading } = useRides(filters);
 
@@ -37,7 +48,8 @@ export default function RideHistoryPage() {
     );
   }
 
-  const rides = ridesCollection?.['hydra:member'] || [];
+  // Support des deux formats : 'hydra:member' (JSON) et 'member' (JS parsé)
+  const rides = ridesCollection?.['hydra:member'] || ridesCollection?.member || [];
 
   // Fonction pour formater la date
   const formatDate = (dateString: string) => {
@@ -55,8 +67,14 @@ export default function RideHistoryPage() {
   const RideCard = ({ ride }: { ride: Ride }) => {
     const statusConfig = RIDE_STATUS[ride.status];
     const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
-    const driver = typeof ride.driver === 'object' ? ride.driver as Driver : null;
-    const driverUser = driver && typeof driver.user === 'object' ? driver.user as User : null;
+
+    // Extraction intelligente du driver (peut être User direct ou Driver avec user)
+    const driver = typeof ride.driver === 'object' ? ride.driver as any : null;
+    const driverUser: User | null = driver
+      ? (driver.user && typeof driver.user === 'object'
+        ? driver.user as User
+        : driver as User) // driver EST l'user
+      : null;
 
     return (
       <Card
@@ -74,17 +92,16 @@ export default function RideHistoryPage() {
             </p>
           </div>
           <div
-            className={`px-3 py-1 rounded-full text-xs font-medium ${
-              ride.status === 'completed'
+            className={`px-3 py-1 rounded-full text-xs font-medium ${ride.status === 'completed'
                 ? 'bg-gray-100 text-gray-800'
                 : ride.status === 'cancelled'
-                ? 'bg-red-100 text-red-800'
-                : ride.status === 'in_progress'
-                ? 'bg-green-100 text-green-800'
-                : ride.status === 'accepted'
-                ? 'bg-blue-100 text-blue-800'
-                : 'bg-yellow-100 text-yellow-800'
-            }`}
+                  ? 'bg-red-100 text-red-800'
+                  : ride.status === 'in_progress'
+                    ? 'bg-green-100 text-green-800'
+                    : ride.status === 'accepted'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-yellow-100 text-yellow-800'
+              }`}
           >
             {statusConfig.label}
           </div>
@@ -95,26 +112,39 @@ export default function RideHistoryPage() {
             <span className="text-green-600 mt-1">📍</span>
             <div className="flex-1">
               <p className="text-sm text-gray-500">Départ</p>
-              <p className="text-sm font-medium truncate">{ride.pickupAddress}</p>
+              <p className="text-sm font-medium truncate">
+                {ride.pickupAddress || <span className="text-red-500">Non disponible</span>}
+              </p>
             </div>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-red-600 mt-1">📍</span>
             <div className="flex-1">
               <p className="text-sm text-gray-500">Arrivée</p>
-              <p className="text-sm font-medium truncate">{ride.dropoffAddress}</p>
+              <p className="text-sm font-medium truncate">
+                {ride.dropoffAddress || <span className="text-red-500">Non disponible</span>}
+              </p>
             </div>
           </div>
         </div>
 
         <div className="flex justify-between items-center pt-3 border-t">
           <div className="flex items-center gap-3 text-sm text-gray-600">
-            <span>{vehicleConfig.icon} {vehicleConfig.label}</span>
-            <span>{ride.estimatedDistance.toFixed(1)} km</span>
-            <span>{ride.estimatedDuration} min</span>
+            <span>{vehicleConfig?.icon || '🚗'} {vehicleConfig?.label || 'Standard'}</span>
+            <span>
+              {ride.estimatedDistance ? `${ride.estimatedDistance.toFixed(1)} km` : <span className="text-red-500">? km</span>}
+            </span>
+            <span>
+              {ride.estimatedDuration ? `${ride.estimatedDuration} min` : <span className="text-red-500">? min</span>}
+            </span>
           </div>
           <div className="text-lg font-bold text-blue-600">
-            {ride.finalPrice ? ride.finalPrice.toFixed(2) : ride.estimatedPrice.toFixed(2)} €
+            {ride.finalPrice
+              ? `${ride.finalPrice.toFixed(2)} €`
+              : ride.estimatedPrice
+              ? `${ride.estimatedPrice.toFixed(2)} €`
+              : <span className="text-red-500">? €</span>
+            }
           </div>
         </div>
 
@@ -124,8 +154,8 @@ export default function RideHistoryPage() {
             <span className="font-medium">
               {driverUser.firstName} {driverUser.lastName}
             </span>
-            {driver && driver.rating && (
-              <span className="ml-2">⭐ {driver.rating.toFixed(1)}</span>
+            {driverUser.rating && (
+              <span className="ml-2">⭐ {driverUser.rating.toFixed(1)}</span>
             )}
           </div>
         )}
@@ -134,12 +164,46 @@ export default function RideHistoryPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-6xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Historique des courses</h1>
-        <p className="text-gray-600 mt-2">
-          Consultez toutes vos courses passées et en cours
-        </p>
+    <div className="container mx-auto p-4 max-w-7xl">
+      {/* Header */}
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Historique des courses</h1>
+          <p className="text-gray-600 mt-2">
+            Consultez toutes vos courses passées et en cours
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => router.push('/passenger/book')}>
+          ← Nouvelle course
+        </Button>
+      </div>
+
+      {/* Statistiques globales */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card className="p-4">
+          <p className="text-sm text-gray-600 mb-1">Courses totales</p>
+          <p className="text-3xl font-bold text-blue-600">{rides.length}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-600 mb-1">Courses terminées</p>
+          <p className="text-3xl font-bold text-green-600">
+            {rides.filter((r) => r.status === 'completed').length}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-600 mb-1">Total dépensé</p>
+          <p className="text-3xl font-bold text-blue-600">
+            {rides
+              .filter((r) => r.finalPrice)
+              .reduce((sum, r) => sum + (r.finalPrice || 0), 0)
+              .toFixed(2)}{' '}
+            €
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-gray-600 mb-1">Note moyenne</p>
+          <p className="text-3xl font-bold text-yellow-600">⭐ {(user?.rating || 0).toFixed(1)}</p>
+        </Card>
       </div>
 
       {/* Filtres */}
@@ -209,49 +273,6 @@ export default function RideHistoryPage() {
               <RideCard key={ride.id} ride={ride} />
             ))}
           </div>
-
-          {/* Statistiques */}
-          <Card className="p-4">
-            <h2 className="font-semibold mb-3">Statistiques</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">
-                  {rides.length}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {statusFilter === 'all' ? 'Total' : RIDE_STATUS[statusFilter].label}
-                </p>
-              </div>
-              {statusFilter === 'all' && (
-                <>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-green-600">
-                      {rides.filter((r) => r.status === 'completed').length}
-                    </p>
-                    <p className="text-sm text-gray-500">Terminées</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-yellow-600">
-                      {rides.filter(
-                        (r) => r.status === 'pending' || r.status === 'accepted' || r.status === 'in_progress'
-                      ).length}
-                    </p>
-                    <p className="text-sm text-gray-500">En cours</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-blue-600">
-                      {rides
-                        .filter((r) => r.finalPrice)
-                        .reduce((sum, r) => sum + (r.finalPrice || 0), 0)
-                        .toFixed(2)}{' '}
-                      €
-                    </p>
-                    <p className="text-sm text-gray-500">Total dépensé</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </Card>
         </>
       )}
     </div>

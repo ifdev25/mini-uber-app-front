@@ -16,7 +16,7 @@ export default function DriverDashboardPage() {
   const [isAvailable, setIsAvailable] = useState(false);
   const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [acceptingRideId, setAcceptingRideId] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<'inactive' | 'active' | 'error'>('inactive');
+  const [gpsStatus, setGpsStatus] = useState<'inactive' | 'active' | 'error' | 'not_implemented'>('inactive');
 
   // Récupérer toutes les courses
   const { data: ridesData, isLoading: ridesLoading, refetch } = useRides();
@@ -39,24 +39,8 @@ export default function DriverDashboardPage() {
       } else if (user.userType?.toLowerCase() !== 'driver') {
         router.push('/login');
       } else {
-        // Logger les informations du driver pour debugging
-        console.log('👤 Informations du chauffeur:', {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          userType: user.userType,
-          isVerified: user.isVerified,
-          driverProfile: user.driverProfile,
-        });
-
         // Vérifier les conditions requises
-        console.log('✅ Conditions pour accepter des courses:');
-        console.log('  - Compte vérifié:', user.isVerified ? '✅' : '❌');
-        console.log('  - Profil driver:', user.driverProfile ? '✅' : '❌');
         if (user.driverProfile) {
-          console.log('  - Disponible:', user.driverProfile.isAvailable ? '✅' : '❌');
-          console.log('  - Type de véhicule:', user.driverProfile.vehicleType);
         }
       }
     }
@@ -66,7 +50,6 @@ export default function DriverDashboardPage() {
   useEffect(() => {
     if (user?.driverProfile) {
       setIsAvailable(user.driverProfile.isAvailable);
-      console.log('🔄 Synchronisation de la disponibilité:', user.driverProfile.isAvailable);
     }
   }, [user?.driverProfile?.isAvailable]);
 
@@ -78,7 +61,6 @@ export default function DriverDashboardPage() {
       return;
     }
 
-    console.log('📍 Démarrage du suivi GPS du driver');
 
     let watchId: number | null = null;
     let lastUpdateTime = 0;
@@ -100,9 +82,13 @@ export default function DriverDashboardPage() {
       lastUpdateTime = now;
 
       try {
-        console.log(`📍 Envoi de la position: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-        await api.updateDriverLocation(latitude, longitude);
-        console.log('✅ Position mise à jour avec succès');
+        const result = await api.updateDriverLocation(latitude, longitude);
+
+        if (result) {
+        } else {
+          // Endpoint non implémenté dans le backend (404)
+          setGpsStatus('not_implemented');
+        }
       } catch (error) {
         console.error('❌ Erreur lors de la mise à jour de la position:', error);
         setGpsStatus('error');
@@ -139,7 +125,6 @@ export default function DriverDashboardPage() {
     // Nettoyage : arrêter le suivi quand le composant est démonté ou quand le driver devient indisponible
     return () => {
       if (watchId !== null) {
-        console.log('🛑 Arrêt du suivi GPS du driver');
         navigator.geolocation.clearWatch(watchId);
         setGpsStatus('inactive');
       }
@@ -174,11 +159,9 @@ export default function DriverDashboardPage() {
       const newAvailability = !isAvailable;
       await api.updateDriverAvailability(newAvailability);
       setIsAvailable(newAvailability);
-      console.log(`✅ Disponibilité mise à jour: ${newAvailability ? 'Disponible' : 'Indisponible'}`);
 
       // Rafraîchir les données utilisateur pour synchroniser user.driverProfile.isAvailable
       await refetchUser();
-      console.log('🔄 Données utilisateur rafraîchies');
     } catch (error) {
       console.error('❌ Erreur lors de la mise à jour de la disponibilité:', error);
       alert('Impossible de mettre à jour votre disponibilité');
@@ -236,7 +219,6 @@ export default function DriverDashboardPage() {
 
       acceptRide.mutate(rideId, {
         onSuccess: (ride) => {
-          console.log('✅ Course acceptée:', ride);
           setAcceptingRideId(null);
           router.push(`/driver/ride/${ride.id}`);
         },
@@ -320,6 +302,8 @@ export default function DriverDashboardPage() {
                   ? 'bg-green-100 text-green-800'
                   : gpsStatus === 'error'
                   ? 'bg-red-100 text-red-800'
+                  : gpsStatus === 'not_implemented'
+                  ? 'bg-orange-100 text-orange-800'
                   : 'bg-gray-100 text-gray-600'
               }`}
             >
@@ -335,6 +319,12 @@ export default function DriverDashboardPage() {
                   <span>GPS erreur</span>
                 </>
               )}
+              {gpsStatus === 'not_implemented' && (
+                <>
+                  <span>⚠️</span>
+                  <span>Backend manquant</span>
+                </>
+              )}
               {gpsStatus === 'inactive' && (
                 <>
                   <span>⏳</span>
@@ -343,6 +333,10 @@ export default function DriverDashboardPage() {
               )}
             </div>
           )}
+
+          <Button onClick={() => router.push('/driver/history')} variant="outline">
+            📊 Historique
+          </Button>
 
           <Button onClick={logout} variant="outline">
             Déconnexion

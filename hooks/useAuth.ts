@@ -6,7 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { User, RegisterData } from '@/lib/types';
+import { User, RegisterData, RegisterResponse } from '@/lib/types';
 import { ROUTES, STORAGE_KEYS } from '@/lib/constants';
 
 export function useAuth() {
@@ -31,7 +31,6 @@ export function useAuth() {
 
       try {
         const userData = await api.getMe();
-        console.log('🔍 Données utilisateur reçues de l\'API:', userData);
         return userData;
       } catch (error) {
         // Si le token est invalide ou le backend indisponible, le nettoyer
@@ -53,34 +52,52 @@ export function useAuth() {
       const response = await api.login(email, password);
       return response;
     },
-    onSuccess: async () => {
-      // Récupérer et mettre en cache l'utilisateur
-      const user = await api.getMe();
-      queryClient.setQueryData(['auth', 'user'], user);
+    onSuccess: async (response) => {
+      try {
+        // Récupérer et mettre en cache l'utilisateur
+        const user = await api.getMe();
+        queryClient.setQueryData(['auth', 'user'], user);
 
-      // Stocker les données utilisateur dans localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-      }
+        // Stocker les données utilisateur dans localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+        }
 
-      // Rediriger selon le type d'utilisateur
-      if (user.userType === 'driver') {
-        router.push(ROUTES.DASHBOARD);
-      } else {
-        router.push(ROUTES.HOME);
+        // Rediriger selon le type d'utilisateur
+        if (user.userType === 'driver') {
+          router.push(ROUTES.DASHBOARD);
+        } else {
+          router.push(ROUTES.HOME);
+        }
+      } catch (error) {
+        console.error('❌ Erreur lors de la récupération du profil:', error);
+        // Si on ne peut pas récupérer le profil, nettoyer le token
+        api.clearToken();
+        throw error;
       }
+    },
+    onError: (error) => {
+      console.error('❌ Erreur de connexion:', error);
     },
   });
 
   /**
    * Mutation d'inscription
    */
-  const registerMutation = useMutation({
+  const registerMutation = useMutation<RegisterResponse, Error, RegisterData>({
     mutationFn: async (data: RegisterData) => {
       return await api.register(data);
     },
     onSuccess: async (response) => {
-      // Le backend gère maintenant l'envoi de l'email de vérification
+      // Le token est déjà stocké dans api.register()
+      // Mettre à jour le cache avec l'utilisateur
+      queryClient.setQueryData(['auth', 'user'], response.user);
+
+      // Stocker les données utilisateur dans localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(response.user));
+      }
+
       // La réponse contient le user avec isVerified: false
       // On ne redirige plus automatiquement pour permettre d'afficher le message de succès
     },

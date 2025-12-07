@@ -15,11 +15,9 @@ export function useCreateRating() {
 
   return useMutation({
     mutationFn: (data: CreateReviewData) => {
-      console.log('📝 Création d\'une notation:', data);
       return api.createReview(data);
     },
     onSuccess: (review: Review) => {
-      console.log('✅ Notation créée avec succès:', review);
       toast.success('Merci pour votre évaluation !');
 
       // Invalider le cache des ratings

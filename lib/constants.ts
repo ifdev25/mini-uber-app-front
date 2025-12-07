@@ -36,12 +36,12 @@ export const VEHICLE_TYPES: Record<VehicleType, {
     icon: '🚙',
     description: 'Véhicule haut de gamme',
   },
-  suv: {
-    label: 'SUV',
+  xl: {
+    label: 'XL',
     pricePerKm: 2.00,
     basePrice: 7.00,
     icon: '🚙',
-    description: 'Grand SUV spacieux',
+    description: 'Grand véhicule spacieux',
   },
 };
 

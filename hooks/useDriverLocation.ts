@@ -15,11 +15,9 @@ export function useUpdateDriverLocation() {
 
   return useMutation({
     mutationFn: ({ lat, lng }: { lat: number; lng: number }) => {
-      console.log('📍 Mise à jour de la position du driver:', { lat, lng });
       return api.updateDriverLocation(lat, lng);
     },
     onSuccess: (driver) => {
-      console.log('✅ Position mise à jour:', driver);
       // Invalider le cache du driver pour rafraîchir
       queryClient.invalidateQueries({ queryKey: ['drivers'] });
       queryClient.invalidateQueries({ queryKey: ['auth', 'user'] });
@@ -57,8 +55,6 @@ export function useDriverLocationTracking(isActive: boolean = false) {
       return;
     }
 
-    console.log('🚀 Démarrage du suivi GPS automatique');
-
     // Fonction de succès lors de la récupération de la position
     const handleSuccess = (position: GeolocationPosition) => {
       const now = Date.now();
@@ -66,7 +62,6 @@ export function useDriverLocationTracking(isActive: boolean = false) {
 
       // Mettre à jour seulement toutes les 5 secondes pour éviter trop de requêtes
       if (now - lastUpdateRef.current >= UPDATE_INTERVAL) {
-        console.log('📍 Nouvelle position détectée:', { latitude, longitude });
         updateLocation.mutate({ lat: latitude, lng: longitude });
         lastUpdateRef.current = now;
       }
@@ -109,7 +104,6 @@ export function useDriverLocationTracking(isActive: boolean = false) {
     // Nettoyer le suivi lors du démontage
     return () => {
       if (watchIdRef.current !== null) {
-        console.log('🛑 Arrêt du suivi GPS');
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
       }

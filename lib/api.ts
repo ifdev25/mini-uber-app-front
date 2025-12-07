@@ -9,6 +9,7 @@ import {
   Ride,
   RideEstimate,
   RegisterData,
+  RegisterResponse,
   LoginResponse,
   EstimateRideData,
   CreateRideData,
@@ -40,8 +41,6 @@ class ApiClient {
    * Transforme les données utilisateur de l'API (lowercase) vers le format frontend (camelCase)
    */
   private transformUserData(apiUser: any): User {
-    console.log('🔍 Données brutes de l\'API (avant transformation):', apiUser);
-
     const transformed = {
       ...apiUser,
       firstName: apiUser.firstname || apiUser.firstName,
@@ -53,7 +52,6 @@ class ApiClient {
       isVerified: apiUser.isVerified !== undefined ? apiUser.isVerified : apiUser.isverified,
     };
 
-    console.log('✅ Données transformées:', transformed);
     return transformed;
   }
 
@@ -189,14 +187,24 @@ class ApiClient {
 
   /**
    * Inscription d'un nouvel utilisateur
-   * POST /api/users
+   * POST /api/register
    */
-  async register(data: RegisterData): Promise<User> {
-    const userData = await this.request<any>('/api/users', {
+  async register(data: RegisterData): Promise<RegisterResponse> {
+    const response = await this.request<RegisterResponse>('/api/register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return this.transformUserData(userData);
+
+    // Stocker le token automatiquement
+    this.setToken(response.token);
+
+    // Transformer les données user pour assurer la compatibilité
+    const transformedUser = this.transformUserData(response.user);
+
+    return {
+      ...response,
+      user: transformedUser,
+    };
   }
 
   /**
@@ -279,14 +287,11 @@ class ApiClient {
    * POST /api/rides
    */
   async createRide(data: CreateRideData): Promise<Ride> {
-    console.log('🌐 API createRide - Données envoyées:', data);
-    console.log('🌐 API createRide - JSON:', JSON.stringify(data, null, 2));
     try {
       const result = await this.request<Ride>('/api/rides', {
         method: 'POST',
         body: JSON.stringify(data),
       });
-      console.log('✅ API createRide - Réponse reçue:', result);
       return result;
     } catch (error) {
       console.error('❌ API createRide - Erreur:', error);
@@ -318,13 +323,11 @@ class ApiClient {
    * POST /api/rides/{id}/accept
    */
   async acceptRide(rideId: number): Promise<Ride> {
-    console.log('🚗 Tentative d\'acceptation de la course', rideId);
     try {
       const result = await this.request<Ride>(`/api/rides/${rideId}/accept`, {
         method: 'POST',
         body: JSON.stringify({}),
       });
-      console.log('✅ Course acceptée avec succès:', result);
       return result;
     } catch (error) {
       console.error('❌ Erreur lors de l\'acceptation de la course', rideId);
@@ -353,7 +356,6 @@ class ApiClient {
    * Note: Le passager peut annuler quand status='pending'
    */
   async cancelRide(rideId: number): Promise<Ride> {
-    console.log('🔄 Annulation de la course', rideId);
     return this.request<Ride>(`/api/rides/${rideId}/status`, {
       method: 'PATCH',
       headers: {
@@ -402,17 +404,27 @@ class ApiClient {
    * PATCH /api/drivers/location
    * Identifie automatiquement le chauffeur via le token JWT
    */
-  async updateDriverLocation(lat: number, lng: number): Promise<Driver> {
-    return this.request<Driver>('/api/drivers/location', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/merge-patch+json',
-      },
-      body: JSON.stringify({
-        currentLatitude: lat,
-        currentLongitude: lng,
-      }),
-    });
+  async updateDriverLocation(lat: number, lng: number): Promise<Driver | null> {
+    try {
+      return await this.request<Driver>('/api/drivers/location', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/merge-patch+json',
+        },
+        body: JSON.stringify({
+          currentLatitude: lat,
+          currentLongitude: lng,
+        }),
+      });
+    } catch (error) {
+      // Gérer silencieusement l'erreur 404 si l'endpoint n'existe pas encore dans le backend
+      if (error instanceof Error && error.message.includes('404')) {
+        console.warn('⚠️ Endpoint /api/drivers/location non implémenté dans le backend. Voir BACKEND_LOCATION_ENDPOINT_MISSING.md');
+        return null;
+      }
+      // Re-throw les autres erreurs
+      throw error;
+    }
   }
 
   /**
@@ -453,7 +465,6 @@ class ApiClient {
    * POST /api/ratings
    */
   async createReview(data: CreateReviewData): Promise<Review> {
-    console.log('📝 Création d\'une notation:', data);
     return this.request<Review>('/api/ratings', {
       method: 'POST',
       body: JSON.stringify(data),

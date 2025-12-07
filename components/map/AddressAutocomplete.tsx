@@ -108,7 +108,6 @@ export function AddressAutocomplete({
 
   // Utiliser la position actuelle
   const useCurrentLocation = () => {
-    console.log('🔍 Tentative de géolocalisation...');
 
     if (!navigator.geolocation) {
       const message = "La géolocalisation n'est pas supportée par votre navigateur";
@@ -121,10 +120,8 @@ export function AddressAutocomplete({
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        console.log('✅ Position obtenue:', position.coords);
         const { latitude, longitude, accuracy } = position.coords;
 
-        console.log(`📏 Précision: ${accuracy} mètres`);
 
         // Avertir si la précision est mauvaise (> 1km)
         if (accuracy > 1000) {
@@ -147,7 +144,6 @@ export function AddressAutocomplete({
 
         // Reverse geocoding pour obtenir l'adresse
         try {
-          console.log('🌍 Tentative de reverse geocoding...');
           const response = await fetch(
             `https://nominatim.openstreetmap.org/reverse?` +
               `format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18`,
@@ -159,7 +155,6 @@ export function AddressAutocomplete({
           );
 
           const data = await response.json();
-          console.log('✅ Adresse trouvée:', data.display_name);
           const addressWithAccuracy = accuracy > 100
             ? `${data.display_name} (±${Math.round(accuracy)}m)`
             : data.display_name;
@@ -167,7 +162,6 @@ export function AddressAutocomplete({
         } catch (error) {
           console.error('⚠️ Reverse geocoding error:', error);
           const fallbackAddress = `Ma position: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m)`;
-          console.log('📍 Utilisation de l\'adresse de secours:', fallbackAddress);
           onSelect(fallbackAddress, latitude, longitude);
         } finally {
           setIsGettingLocation(false);

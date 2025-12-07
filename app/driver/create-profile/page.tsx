@@ -20,17 +20,15 @@ import toast from 'react-hot-toast';
 const driverProfileSchema = z.object({
   vehicleModel: z.string().min(2, 'Le modèle du véhicule doit contenir au moins 2 caractères'),
   vehicleType: z.enum(['standard', 'comfort', 'premium', 'xl'], {
-    required_error: 'Veuillez sélectionner un type de véhicule',
+    message: 'Veuillez sélectionner un type de véhicule',
   }),
   vehicleColor: z.string().min(2, 'La couleur doit contenir au moins 2 caractères'),
   licenceNumber: z.string().min(5, 'Le numéro de permis doit contenir au moins 5 caractères'),
   currentLatitude: z.number({
-    required_error: 'La latitude est requise',
-    invalid_type_error: 'La latitude doit être un nombre',
+    message: 'La latitude doit être un nombre',
   }),
   currentLongitude: z.number({
-    required_error: 'La longitude est requise',
-    invalid_type_error: 'La longitude doit être un nombre',
+    message: 'La longitude doit être un nombre',
   }),
 });
 
@@ -145,12 +143,10 @@ export default function CreateDriverProfilePage() {
         currentLongitude: data.currentLongitude,
       };
 
-      console.log('📤 Création du profil driver avec les données:', driverData);
 
       // Appeler l'API
       const driver = await api.createDriver(driverData);
 
-      console.log('✅ Profil driver créé avec succès:', driver);
 
       toast.success('Profil créé avec succès ! Bienvenue chez Mini Uber.', {
         id: loadingToastId,
@@ -187,6 +183,15 @@ export default function CreateDriverProfilePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-2xl mx-auto pt-8">
+        {/* Bouton retour */}
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/driver/dashboard')}
+          className="mb-4"
+        >
+          ← Retour au dashboard
+        </Button>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">Créer votre profil chauffeur</CardTitle>
