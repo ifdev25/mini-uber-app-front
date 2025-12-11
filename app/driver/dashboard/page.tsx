@@ -136,8 +136,19 @@ export default function DriverDashboardPage() {
   // Récupérer toutes les courses
   const allRides = ridesData?.['hydra:member'] || ridesData?.member || [];
 
-  // Filtrer les courses en attente (pending)
-  const pendingRides = allRides.filter((ride: Ride) => ride.status === 'pending');
+  // Filtrer les courses en attente (pending) ET compatibles avec le type de véhicule du driver
+  const pendingRides = allRides.filter((ride: Ride) => {
+    // Filtrer uniquement les courses pending
+    if (ride.status !== 'pending') return false;
+
+    // Si le driver a un profil, filtrer par type de véhicule
+    if (user?.driverProfile) {
+      return ride.vehicleType === user.driverProfile.vehicleType;
+    }
+
+    // Si pas de profil driver, montrer toutes les courses pending
+    return true;
+  });
 
   // Trouver la course active du chauffeur (accepted ou in_progress)
   const activeRide = allRides.find(
@@ -211,12 +222,8 @@ export default function DriverDashboardPage() {
       return;
     }
 
-    // 4. Vérifier que le type de véhicule correspond
-    const ride = pendingRides.find((r: Ride) => r.id === rideId);
-    if (ride && driverProfile.vehicleType !== ride.vehicleType) {
-      alert(`❌ Type de véhicule incompatible\n\nCette course nécessite un véhicule de type "${ride.vehicleType}" mais votre véhicule est de type "${driverProfile.vehicleType}".\n\nVous ne pouvez accepter que des courses correspondant à votre type de véhicule.`);
-      return;
-    }
+    // Note: La vérification du type de véhicule n'est plus nécessaire ici car
+    // les courses incompatibles sont déjà filtrées en amont (lignes 139-151)
 
     const confirmed = confirm('Voulez-vous accepter cette course ?');
     if (confirmed) {
@@ -442,19 +449,15 @@ export default function DriverDashboardPage() {
                 {pendingRides.map((ride: Ride) => {
                   const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
                   const driverProfile = user?.driverProfile;
-                  const isVehicleTypeMatch = driverProfile && driverProfile.vehicleType === ride.vehicleType;
+                  // Toutes les courses affichées sont déjà compatibles (filtrées en amont)
                   // FIX: Utiliser l'état local `isAvailable` au lieu de driverProfile?.isAvailable
                   // car l'état local est toujours à jour après le toggle, tandis que driverProfile dépend du refetch
-                  const canAcceptRide = user?.isVerified && isAvailable && isVehicleTypeMatch;
+                  const canAcceptRide = user?.isVerified && isAvailable && driverProfile;
 
                   return (
                     <Card
                       key={ride.id}
-                      className={`p-4 border-2 transition ${
-                        !isVehicleTypeMatch
-                          ? 'border-gray-200 bg-gray-50 opacity-60'
-                          : 'hover:border-blue-300'
-                      }`}
+                      className="p-4 border-2 transition hover:border-blue-300"
                     >
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="md:col-span-2 space-y-2">
@@ -473,15 +476,10 @@ export default function DriverDashboardPage() {
                             <span>
                               ⏱️ {ride.estimatedDuration} min
                             </span>
-                            <span className={!isVehicleTypeMatch ? 'text-orange-600 font-semibold' : ''}>
+                            <span>
                               {vehicleConfig.icon} {vehicleConfig.label}
                             </span>
                           </div>
-                          {!isVehicleTypeMatch && driverProfile && (
-                            <p className="text-xs text-orange-600 font-medium">
-                              ⚠️ Type de véhicule incompatible (vous avez: {VEHICLE_TYPES[driverProfile.vehicleType]?.label})
-                            </p>
-                          )}
                         </div>
                         <div className="flex flex-col justify-between">
                           <div>
@@ -501,8 +499,6 @@ export default function DriverDashboardPage() {
                                 ? '⏳ Acceptation...'
                                 : acceptingRideId !== null
                                 ? '⏳ En cours...'
-                                : !isVehicleTypeMatch
-                                ? '❌ Incompatible'
                                 : !user?.isVerified
                                 ? '❌ Non vérifié'
                                 : !isAvailable
@@ -515,8 +511,8 @@ export default function DriverDashboardPage() {
                                   ? 'Compte non vérifié'
                                   : !isAvailable
                                   ? 'Activez votre disponibilité'
-                                  : !isVehicleTypeMatch
-                                  ? 'Type de véhicule incompatible'
+                                  : !driverProfile
+                                  ? 'Créez votre profil'
                                   : ''}
                               </p>
                             )}
