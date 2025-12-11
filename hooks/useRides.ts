@@ -2,50 +2,24 @@
  * Hook React Query pour la gestion des courses
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { CreateRideData, Ride, HydraCollection, Driver } from '@/lib/types';
+import { CreateRideData, Ride } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
+import { useApiMutation } from './useApiMutation';
 
 /**
  * Hook pour créer une nouvelle course
  */
 export function useCreateRide() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (data: CreateRideData) => {
-      return api.createRide(data);
-    },
-    onSuccess: (ride: Ride) => {
-      toast.success('Course créée avec succès ! Recherche d\'un chauffeur en cours...');
-
-      // Invalider le cache des courses pour rafraîchir la liste
-      queryClient.invalidateQueries({ queryKey: ['rides'] });
-
-      // Rediriger vers la page de suivi de la course
-      router.push(`/passenger/ride/${ride.id}`);
-    },
-    onError: (error: Error) => {
-      console.error('❌ Erreur lors de la création de la course:', error);
-      console.error('❌ Message d\'erreur:', error.message);
-      console.error('❌ Stack:', error.stack);
-
-      // Messages d'erreur personnalisés
-      let userMessage = error.message;
-
-      if (error.message.includes('vérifier votre email')) {
-        userMessage = 'Vous devez vérifier votre email avant de pouvoir créer une course.';
-      } else if (error.message.includes('403')) {
-        userMessage = 'Vous devez vérifier votre email pour créer une course.';
-      } else if (error.message.includes('401')) {
-        userMessage = 'Vous devez être connecté pour créer une course.';
-      }
-
-      toast.error(userMessage);
-    },
+  return useApiMutation<Ride, CreateRideData>({
+    mutationFn: (data: CreateRideData) => api.createRide(data),
+    successMessage: 'Course créée avec succès ! Recherche d\'un chauffeur en cours...',
+    errorContext: 'création de la course',
+    invalidateQueries: [['rides']],
+    onSuccessCallback: (ride) => router.push(`/passenger/ride/${ride.id}`),
   });
 }
 
@@ -89,20 +63,11 @@ export function useRide(rideId: number) {
  * Hook pour accepter une course (chauffeur)
  */
 export function useAcceptRide() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
+  return useApiMutation<Ride, number>({
     mutationFn: (rideId: number) => api.acceptRide(rideId),
-    onSuccess: (ride: Ride) => {
-      toast.success('Course acceptée ! Dirigez-vous vers le point de départ.');
-      // Invalider le cache de la course et de la liste des courses
-      queryClient.invalidateQueries({ queryKey: ['rides', ride.id] });
-      queryClient.invalidateQueries({ queryKey: ['rides'] });
-    },
-    onError: (error: Error) => {
-      console.error('Failed to accept ride:', error);
-      toast.error(error.message || 'Impossible d\'accepter la course.');
-    },
+    successMessage: 'Course acceptée ! Dirigez-vous vers le point de départ.',
+    errorContext: 'acceptation de la course',
+    invalidateQueries: [['rides']],
   });
 }
 
@@ -110,69 +75,32 @@ export function useAcceptRide() {
  * Hook pour mettre à jour le statut d'une course (chauffeur)
  */
 export function useUpdateRideStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ rideId, status }: { rideId: number; status: string }) =>
-      api.updateRideStatus(rideId, status),
-    onSuccess: (ride: Ride) => {
+  return useApiMutation<Ride, { rideId: number; status: string }>({
+    mutationFn: ({ rideId, status }) => api.updateRideStatus(rideId, status),
+    successMessage: (ride) => {
       const statusMessages = {
         'in_progress': 'Course démarrée !',
         'completed': 'Course terminée avec succès !',
       };
-      const message = statusMessages[ride.status as keyof typeof statusMessages] || 'Statut mis à jour.';
-      toast.success(message);
-
-      // Invalider le cache de la course et de la liste des courses
-      queryClient.invalidateQueries({ queryKey: ['rides', ride.id] });
-      queryClient.invalidateQueries({ queryKey: ['rides'] });
+      return statusMessages[ride.status as keyof typeof statusMessages] || 'Statut mis à jour.';
     },
-    onError: (error: Error) => {
-      console.error('Failed to update ride status:', error);
-      toast.error(error.message || 'Impossible de mettre à jour le statut.');
-    },
+    errorContext: 'mise à jour du statut',
+    invalidateQueries: [['rides']],
   });
 }
 
 /**
- * Hook pour annuler une course (passager)
- * Note: Fonctionne uniquement pour les courses avec status='pending'
+ * Hook pour annuler une course (passager ou driver)
  */
 export function useCancelRide() {
-  const queryClient = useQueryClient();
   const router = useRouter();
 
-  return useMutation({
-    mutationFn: (rideId: number) => {
-      return api.cancelRide(rideId);
-    },
-    onSuccess: (ride: Ride) => {
-      toast.success('Course annulée avec succès');
-
-      // Invalider le cache de la course et de la liste des courses
-      queryClient.invalidateQueries({ queryKey: ['rides', ride.id] });
-      queryClient.invalidateQueries({ queryKey: ['rides'] });
-
-      // Rediriger vers l'historique
-      router.push('/passenger/history');
-    },
-    onError: (error: Error) => {
-      console.error('❌ Erreur lors de l\'annulation:', error);
-      console.error('❌ Message:', error.message);
-
-      let message = error.message;
-
-      // Messages d'erreur plus clairs
-      if (message.includes('403') || message.includes('Forbidden')) {
-        message = 'Seules les courses en attente ou acceptées peuvent être annulées.';
-      } else if (message.includes('404')) {
-        message = 'Course introuvable.';
-      } else if (message.includes('401')) {
-        message = 'Vous devez être connecté pour annuler une course.';
-      }
-
-      toast.error(message);
-    },
+  return useApiMutation<Ride, number>({
+    mutationFn: (rideId: number) => api.cancelRide(rideId),
+    successMessage: 'Course annulée avec succès',
+    errorContext: 'annulation de la course',
+    invalidateQueries: [['rides']],
+    onSuccessCallback: () => router.push('/passenger/history'),
   });
 }
 

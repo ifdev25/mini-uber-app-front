@@ -35,35 +35,6 @@ function DashboardContent() {
           />
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-gray-600">Email</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{user?.email}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-gray-600">Type de compte</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold capitalize">{user?.userType || 'Non défini'}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-gray-600">Note</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-semibold">{user?.rating} / 5</p>
-            </CardContent>
-          </Card>
-        </div>
-
         <Card>
           <CardHeader>
             <CardTitle>Informations du compte</CardTitle>
@@ -71,12 +42,20 @@ function DashboardContent() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Email</span>
+                <span className="font-medium">{user?.email}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-600">Téléphone</span>
                 <span className="font-medium">{user?.phone}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="text-gray-600">Type d'utilisateur</span>
+                <span className="text-gray-600">Type de compte</span>
                 <span className="font-medium capitalize">{user?.userType || 'Non défini'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Note</span>
+                <span className="font-medium">{user?.rating ? `${user.rating} / 5` : 'Non noté'}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-600">Membre depuis</span>
@@ -121,7 +100,7 @@ function DashboardContent() {
                 <CardTitle>Actions rapides</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <Button
                     variant="default"
                     className="w-full h-24 flex flex-col gap-2"

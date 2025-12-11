@@ -7,15 +7,10 @@ import {
   User,
   Driver,
   Ride,
-  RideEstimate,
   RegisterData,
   RegisterResponse,
   LoginResponse,
-  EstimateRideData,
   CreateRideData,
-  UpdateRideStatusData,
-  UpdateDriverLocationData,
-  UpdateDriverAvailabilityData,
   CreateDriverData,
   CreateReviewData,
   Review,
@@ -38,21 +33,11 @@ class ApiClient {
   }
 
   /**
-   * Transforme les données utilisateur de l'API (lowercase) vers le format frontend (camelCase)
+   * Retourne les données utilisateur
+   * Note: Le backend renvoie déjà les données au format camelCase
    */
   private transformUserData(apiUser: any): User {
-    const transformed = {
-      ...apiUser,
-      firstName: apiUser.firstname || apiUser.firstName,
-      lastName: apiUser.lastname || apiUser.lastName,
-      userType: apiUser.usertype || apiUser.userType,
-      createdAt: apiUser.createdAt || apiUser.createdat || apiUser.created_at,
-      totalRides: apiUser.totalRides || apiUser.totalrides,
-      profilePictureUrl: apiUser.profilePictureUrl || apiUser.profilepictureurl,
-      isVerified: apiUser.isVerified !== undefined ? apiUser.isVerified : apiUser.isverified,
-    };
-
-    return transformed;
+    return apiUser;
   }
 
   /**
@@ -148,7 +133,7 @@ class ApiClient {
               .join(', ');
             errorMessage = `Erreur de validation: ${violationMessages}`;
           } else {
-            errorMessage = error['hydra:description'] || error['hydra:title'] || errorMessage;
+            errorMessage = error['hydra:description'] || error['hydra:title'] || error.message || errorMessage;
           }
 
           // Améliorer les messages d'erreur spécifiques
@@ -232,25 +217,6 @@ class ApiClient {
     return this.transformUserData(userData);
   }
 
-  /**
-   * Récupérer un utilisateur par ID
-   * GET /api/users/{id}
-   */
-  async getUser(id: number): Promise<User> {
-    const userData = await this.request<any>(`/api/users/${id}`);
-    return this.transformUserData(userData);
-  }
-
-  /**
-   * Récupérer la liste des utilisateurs
-   * GET /api/users
-   */
-  async getUsers(filters?: Record<string, any>): Promise<HydraCollection<User>> {
-    const params = new URLSearchParams(filters).toString();
-    return this.request<HydraCollection<User>>(
-      `/api/users${params ? `?${params}` : ''}`
-    );
-  }
 
   /**
    * Mettre à jour un utilisateur
@@ -270,17 +236,6 @@ class ApiClient {
   // ============================================
   // Rides
   // ============================================
-
-  /**
-   * Estimer le prix d'une course
-   * POST /api/ride-estimates
-   */
-  async estimateRide(data: EstimateRideData): Promise<RideEstimate> {
-    return this.request<RideEstimate>('/api/ride-estimates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
 
   /**
    * Créer une nouvelle course
@@ -351,17 +306,13 @@ class ApiClient {
   }
 
   /**
-   * Annuler une course (passager)
-   * PATCH /api/rides/{id}/status
-   * Note: Le passager peut annuler quand status='pending'
+   * Annuler une course (passager ou driver)
+   * POST /api/rides/{id}/cancel
    */
   async cancelRide(rideId: number): Promise<Ride> {
-    return this.request<Ride>(`/api/rides/${rideId}/status`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/merge-patch+json',
-      },
-      body: JSON.stringify({ status: 'cancelled' }),
+    return this.request<Ride>(`/api/rides/${rideId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   }
 
@@ -429,17 +380,40 @@ class ApiClient {
 
   /**
    * Mettre à jour la disponibilité du chauffeur
-   * PATCH /api/drivers/availability
+   * PATCH /api/drivers/availability (préféré) ou PATCH /api/drivers/{id} (fallback)
    * Identifie automatiquement le chauffeur via le token JWT
    */
   async updateDriverAvailability(isAvailable: boolean): Promise<Driver> {
-    return this.request<Driver>('/api/drivers/availability', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/merge-patch+json',
-      },
-      body: JSON.stringify({ isAvailable }),
-    });
+    try {
+      // Essayer l'endpoint dédié d'abord
+      return await this.request<Driver>('/api/drivers/availability', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/merge-patch+json',
+        },
+        body: JSON.stringify({ isAvailable }),
+      });
+    } catch (error) {
+      // Si 404, utiliser le fallback PATCH /api/drivers/{id}
+      const is404 = error instanceof Error &&
+                    (error.message.includes('404') || error.message.includes('Not Found'));
+
+      if (is404) {
+        console.warn('⚠️ Endpoint /api/drivers/availability non implémenté. Utilisation du fallback.');
+
+        // Récupérer l'ID du driver via /api/me
+        const user = await this.getMe();
+        if (!user.driverProfile?.id) {
+          throw new Error('Driver profile not found for current user');
+        }
+
+        // Utiliser PATCH /api/drivers/{id}
+        return await this.updateDriver(user.driverProfile.id, { isAvailable });
+      }
+
+      // Re-throw les autres erreurs
+      throw error;
+    }
   }
 
   /**
@@ -447,13 +421,21 @@ class ApiClient {
    * PATCH /api/drivers/{id}
    */
   async updateDriver(id: number, data: Partial<Driver>): Promise<Driver> {
-    return this.request<Driver>(`/api/drivers/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/merge-patch+json',
-      },
-      body: JSON.stringify(data),
-    });
+    try {
+      const result = await this.request<Driver>(`/api/drivers/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/merge-patch+json',
+        },
+        body: JSON.stringify(data),
+      });
+      console.log('✅ Driver mis à jour:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Erreur lors de la mise à jour du driver:', error);
+      console.error('❌ Données envoyées:', data);
+      throw error;
+    }
   }
 
   // ============================================

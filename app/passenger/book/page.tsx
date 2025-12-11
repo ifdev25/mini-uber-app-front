@@ -101,6 +101,12 @@ export default function BookRidePage() {
   const handleBookRide = () => {
     if (!pickup || !dropoff || !estimate || !user) return;
 
+    // Vérifier que l'utilisateur a vérifié son email
+    if (!user.isVerified) {
+      alert('❌ Compte non vérifié\n\nVous devez vérifier votre email avant de pouvoir réserver une course.\n\nVeuillez consulter votre boîte email et cliquer sur le lien de vérification.');
+      return;
+    }
+
     const rideData = {
       passenger: `/api/users/${user.id}`,
       pickupAddress: pickup.address,
@@ -110,6 +116,9 @@ export default function BookRidePage() {
       dropoffLatitude: dropoff.lat,
       dropoffLongitude: dropoff.lng,
       vehicleType: selectedVehicle,
+      estimatedPrice: estimate.price,
+      estimatedDistance: estimate.distance,
+      estimatedDuration: estimate.duration,
     };
 
     createRide.mutate(rideData);
@@ -352,7 +361,7 @@ export default function BookRidePage() {
           {/* Choix du véhicule */}
           <Card className="p-4">
             <Label>Type de véhicule</Label>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-2">
               {(Object.keys(VEHICLE_TYPES) as VehicleType[]).map((type) => {
                 const vehicle = VEHICLE_TYPES[type];
                 return (

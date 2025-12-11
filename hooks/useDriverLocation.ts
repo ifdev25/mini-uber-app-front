@@ -2,30 +2,21 @@
  * Hook pour gérer la position GPS du chauffeur en temps réel
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import toast from 'react-hot-toast';
 import { useEffect, useRef } from 'react';
+import { api } from '@/lib/api';
+import { Driver } from '@/lib/types';
+import toast from 'react-hot-toast';
+import { useApiMutation } from './useApiMutation';
 
 /**
  * Hook pour mettre à jour la position du chauffeur
  */
 export function useUpdateDriverLocation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ lat, lng }: { lat: number; lng: number }) => {
-      return api.updateDriverLocation(lat, lng);
-    },
-    onSuccess: (driver) => {
-      // Invalider le cache du driver pour rafraîchir
-      queryClient.invalidateQueries({ queryKey: ['drivers'] });
-      queryClient.invalidateQueries({ queryKey: ['auth', 'user'] });
-    },
-    onError: (error: Error) => {
-      console.error('❌ Erreur lors de la mise à jour de la position:', error);
-      toast.error('Impossible de mettre à jour votre position.');
-    },
+  return useApiMutation<Driver | null, { lat: number; lng: number }>({
+    mutationFn: ({ lat, lng }) => api.updateDriverLocation(lat, lng),
+    errorContext: 'mise à jour de la position',
+    invalidateQueries: [['drivers'], ['auth', 'user']],
+    // Pas de successMessage car c'est un update silencieux fréquent
   });
 }
 

@@ -115,19 +115,8 @@ export const USER_TYPES = {
 
 export const API_CONFIG = {
   BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-  MERCURE_URL: process.env.NEXT_PUBLIC_MERCURE_URL || 'http://localhost:3000/.well-known/mercure',
   TIMEOUT: 10000, // 10 secondes
   RETRY_ATTEMPTS: 3,
-} as const;
-
-// ============================================
-// Mercure Topics
-// ============================================
-
-export const MERCURE_TOPICS = {
-  user: (userId: number) => `users/${userId}`,
-  driver: (driverId: number) => `drivers/${driverId}`,
-  driverLocation: (driverId: number) => `drivers/${driverId}/location`,
 } as const;
 
 // ============================================
@@ -176,16 +165,6 @@ export const ROUTES = {
   LOGIN: '/login',
   REGISTER: '/register',
   DASHBOARD: '/dashboard',
-  RIDES: '/rides',
-  RIDES_NEW: '/rides/new',
-  RIDES_DETAIL: (id: number) => `/rides/${id}`,
-  RIDES_SEARCHING: (id: number) => `/rides/${id}/searching`,
-  RIDES_TRACKING: (id: number) => `/rides/${id}/tracking`,
-  RIDES_SUMMARY: (id: number) => `/rides/${id}/summary`,
-  RIDES_DRIVING: (id: number) => `/rides/${id}/driving`,
-  HISTORY: '/history',
-  PROFILE: '/profile',
-  PROFILE_DRIVER: '/profile/driver',
 } as const;
 
 // ============================================
@@ -237,17 +216,6 @@ export const DEFAULT_VALUES = {
   USER_RATING: 5.0,
   DRIVER_RATING: 5.0,
   PAGE_SIZE: 20,
-} as const;
-
-// ============================================
-// Time Formats
-// ============================================
-
-export const TIME_FORMATS = {
-  DATE: 'DD/MM/YYYY',
-  TIME: 'HH:mm',
-  DATETIME: 'DD/MM/YYYY HH:mm',
-  ISO: 'YYYY-MM-DDTHH:mm:ss',
 } as const;
 
 // ============================================

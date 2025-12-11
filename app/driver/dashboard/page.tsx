@@ -6,21 +6,23 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useRides, useAcceptRide } from '@/hooks/useRides';
+import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
 import { Ride } from '@/lib/types';
 import { api } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function DriverDashboardPage() {
   const router = useRouter();
   const { user, isLoadingUser, logout, refetch: refetchUser } = useAuth();
   const [isAvailable, setIsAvailable] = useState(false);
-  const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [acceptingRideId, setAcceptingRideId] = useState<number | null>(null);
   const [gpsStatus, setGpsStatus] = useState<'inactive' | 'active' | 'error' | 'not_implemented'>('inactive');
 
-  // Récupérer toutes les courses
+  // Hooks pour gérer les courses et la disponibilité
   const { data: ridesData, isLoading: ridesLoading, refetch } = useRides();
   const acceptRide = useAcceptRide();
+  const availabilityMutation = useDriverAvailability();
 
   // Polling pour rafraîchir les courses toutes les 5 secondes
   useEffect(() => {
@@ -154,19 +156,23 @@ export default function DriverDashboardPage() {
 
   // Gérer le toggle de disponibilité
   const handleToggleAvailability = async () => {
-    setIsTogglingAvailability(true);
-    try {
-      const newAvailability = !isAvailable;
-      await api.updateDriverAvailability(newAvailability);
-      setIsAvailable(newAvailability);
+    if (!user?.driverProfile) {
+      toast.error('Profil chauffeur introuvable. Veuillez créer un profil chauffeur.');
+      return;
+    }
 
-      // Rafraîchir les données utilisateur pour synchroniser user.driverProfile.isAvailable
-      await refetchUser();
+    const newAvailability = !isAvailable;
+
+    try {
+      const result = await availabilityMutation.mutateAsync(newAvailability);
+
+      if (result && result.isAvailable !== undefined) {
+        setIsAvailable(result.isAvailable);
+        // Rafraîchir les données utilisateur pour synchroniser user.driverProfile.isAvailable
+        await refetchUser();
+      }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour de la disponibilité:', error);
-      alert('Impossible de mettre à jour votre disponibilité');
-    } finally {
-      setIsTogglingAvailability(false);
+      // L'erreur est déjà gérée par useApiMutation avec toast
     }
   };
 
@@ -283,11 +289,11 @@ export default function DriverDashboardPage() {
           {/* Toggle disponibilité */}
           <Button
             onClick={handleToggleAvailability}
-            disabled={isTogglingAvailability}
+            disabled={availabilityMutation.isPending}
             variant={isAvailable ? 'default' : 'outline'}
             className={isAvailable ? 'bg-green-600 hover:bg-green-700' : ''}
           >
-            {isTogglingAvailability
+            {availabilityMutation.isPending
               ? '⏳ Mise à jour...'
               : isAvailable
               ? '✅ Disponible'
@@ -343,6 +349,37 @@ export default function DriverDashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* Bandeau d'alerte si conditions non remplies */}
+      {(!user?.isVerified || !isAvailable || !user?.driverProfile) && (
+        <Card className="mb-6 p-4 bg-yellow-50 border-yellow-300">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h3 className="font-bold text-yellow-800 mb-2">
+                Vous ne pouvez pas accepter de courses pour le moment
+              </h3>
+              <div className="space-y-1 text-sm">
+                {!user?.driverProfile && (
+                  <p className="text-yellow-700">
+                    ❌ <strong>Profil chauffeur manquant</strong> - Créez votre profil chauffeur pour accepter des courses
+                  </p>
+                )}
+                {!user?.isVerified && (
+                  <p className="text-yellow-700">
+                    ❌ <strong>Compte non vérifié</strong> - Votre compte doit être vérifié par un administrateur. Contactez le support.
+                  </p>
+                )}
+                {user?.driverProfile && user?.isVerified && !isAvailable && (
+                  <p className="text-yellow-700">
+                    ❌ <strong>Disponibilité désactivée</strong> - Activez votre disponibilité en cliquant sur le bouton "Disponible" ci-dessus
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Colonne principale - Courses */}
@@ -406,7 +443,9 @@ export default function DriverDashboardPage() {
                   const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
                   const driverProfile = user?.driverProfile;
                   const isVehicleTypeMatch = driverProfile && driverProfile.vehicleType === ride.vehicleType;
-                  const canAcceptRide = user?.isVerified && driverProfile?.isAvailable && isVehicleTypeMatch;
+                  // FIX: Utiliser l'état local `isAvailable` au lieu de driverProfile?.isAvailable
+                  // car l'état local est toujours à jour après le toggle, tandis que driverProfile dépend du refetch
+                  const canAcceptRide = user?.isVerified && isAvailable && isVehicleTypeMatch;
 
                   return (
                     <Card
@@ -451,20 +490,37 @@ export default function DriverDashboardPage() {
                               {ride.estimatedPrice.toFixed(2)} €
                             </p>
                           </div>
-                          <Button
-                            className="w-full mt-2"
-                            onClick={() => handleAcceptRide(ride.id)}
-                            disabled={acceptingRideId !== null || !!activeRide || !canAcceptRide}
-                            variant={!canAcceptRide ? 'outline' : 'default'}
-                          >
-                            {acceptingRideId === ride.id
-                              ? '⏳ Acceptation...'
-                              : acceptingRideId !== null
-                              ? '⏳ En cours...'
-                              : !isVehicleTypeMatch
-                              ? '❌ Incompatible'
-                              : '✅ Accepter'}
-                          </Button>
+                          <div>
+                            <Button
+                              className="w-full mt-2"
+                              onClick={() => handleAcceptRide(ride.id)}
+                              disabled={acceptingRideId !== null || !!activeRide || !canAcceptRide}
+                              variant={!canAcceptRide ? 'outline' : 'default'}
+                            >
+                              {acceptingRideId === ride.id
+                                ? '⏳ Acceptation...'
+                                : acceptingRideId !== null
+                                ? '⏳ En cours...'
+                                : !isVehicleTypeMatch
+                                ? '❌ Incompatible'
+                                : !user?.isVerified
+                                ? '❌ Non vérifié'
+                                : !isAvailable
+                                ? '❌ Indisponible'
+                                : '✅ Accepter'}
+                            </Button>
+                            {!canAcceptRide && !acceptingRideId && !activeRide && (
+                              <p className="text-xs text-red-600 mt-1 text-center">
+                                {!user?.isVerified
+                                  ? 'Compte non vérifié'
+                                  : !isAvailable
+                                  ? 'Activez votre disponibilité'
+                                  : !isVehicleTypeMatch
+                                  ? 'Type de véhicule incompatible'
+                                  : ''}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -477,93 +533,106 @@ export default function DriverDashboardPage() {
 
         {/* Colonne droite - Statistiques */}
         <div className="space-y-6">
-          {/* Statistiques du jour */}
-          <Card className="p-6">
-            <h2 className="text-xl font-bold mb-4">📊 Aujourd'hui</h2>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-600">Courses terminées</p>
-                <p className="text-3xl font-bold">{todayStats.totalRides}</p>
+          {/* Grille pour Aujourd'hui et Conditions */}
+          <div className="grid grid-cols-2 gap-6">
+            {/* Statistiques du jour */}
+            <Card className="p-6">
+              <h2 className="text-xl font-bold mb-4">📊 Aujourd'hui</h2>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600">Courses terminées</p>
+                  <p className="text-3xl font-bold">{todayStats.totalRides}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Gains</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {todayStats.earnings.toFixed(2)} €
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Gains</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {todayStats.earnings.toFixed(2)} €
+            </Card>
+
+            {/* Aide rapide */}
+            <Card className="p-6 bg-gray-50">
+              <h2 className="text-lg font-bold mb-3">💡 Conditions pour accepter une course</h2>
+              <div className="space-y-2 text-sm">
+                <p className={user?.isVerified ? 'text-green-600' : 'text-orange-600'}>
+                  {user?.isVerified ? '✅' : '❌'} Compte vérifié
+                </p>
+                <p className={isAvailable ? 'text-green-600' : 'text-orange-600'}>
+                  {isAvailable ? '✅' : '❌'} Disponibilité activée
+                </p>
+                <p className={user?.driverProfile ? 'text-green-600' : 'text-orange-600'}>
+                  {user?.driverProfile ? '✅' : '❌'} Profil chauffeur créé
+                </p>
+                <p className="text-gray-600">
+                  ℹ️ Type de véhicule correspondant requis
+                </p>
+                <p className="text-gray-600">
+                  ℹ️ Une seule course active à la fois
                 </p>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
 
           {/* Infos chauffeur */}
           <Card className="p-6">
-            <h2 className="text-xl font-bold mb-4">👤 Mon profil</h2>
+            <h2 className="text-xl font-bold mb-4">Informations du compte</h2>
             <div className="space-y-3">
-              <p>
-                <span className="text-sm text-gray-600">Nom:</span>{' '}
-                <span className="font-medium">
-                  {user?.firstName} {user?.lastName}
-                </span>
-              </p>
-              <p>
-                <span className="text-sm text-gray-600">Email:</span>{' '}
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Email</span>
                 <span className="font-medium">{user?.email}</span>
-              </p>
-              <p>
-                <span className="text-sm text-gray-600">Type:</span>{' '}
-                <span className="font-medium">Chauffeur</span>
-              </p>
-
-              {/* Statut de vérification */}
-              <div className="pt-2 border-t">
-                <p className="text-sm text-gray-600 mb-1">Statut du compte:</p>
-                <div className="flex items-center gap-2">
-                  {user?.isVerified ? (
-                    <span className="text-sm font-medium text-green-600">✅ Vérifié</span>
-                  ) : (
-                    <span className="text-sm font-medium text-orange-600">⚠️ Non vérifié</span>
-                  )}
-                </div>
-                {!user?.isVerified && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Votre compte doit être vérifié pour accepter des courses
-                  </p>
-                )}
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Téléphone</span>
+                <span className="font-medium">{user?.phone}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Type de compte</span>
+                <span className="font-medium capitalize">{user?.userType || 'Non défini'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Note</span>
+                <span className="font-medium">{user?.rating ? `${user.rating} / 5` : 'Non noté'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Statut</span>
+                <span className={`font-medium ${user?.isVerified ? 'text-green-600' : 'text-orange-600'}`}>
+                  {user?.isVerified ? '✅ Vérifié' : '⚠️ Non vérifié'}
+                </span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Membre depuis</span>
+                <span className="font-medium">
+                  {(user?.createdAt || user?.created_at) ? new Date(user.createdAt || user.created_at!).toLocaleDateString('fr-FR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'Non disponible'}
+                </span>
               </div>
 
               {/* Infos véhicule */}
               {user?.driverProfile && (
-                <div className="pt-2 border-t">
-                  <p className="text-sm text-gray-600 mb-1">Véhicule:</p>
-                  <p className="text-sm font-medium">
-                    {user.driverProfile.vehicleModel} ({user.driverProfile.vehicleColor})
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Type: {VEHICLE_TYPES[user.driverProfile.vehicleType]?.label || user.driverProfile.vehicleType}
-                  </p>
-                </div>
+                <>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-gray-600">Véhicule</span>
+                    <span className="font-medium">
+                      {user.driverProfile.vehicleModel}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-gray-600">Couleur</span>
+                    <span className="font-medium">{user.driverProfile.vehicleColor}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-gray-600">Type de véhicule</span>
+                    <span className="font-medium">
+                      {VEHICLE_TYPES[user.driverProfile.vehicleType]?.label || user.driverProfile.vehicleType}
+                    </span>
+                  </div>
+                </>
               )}
-            </div>
-          </Card>
-
-          {/* Aide rapide */}
-          <Card className="p-6 bg-gray-50">
-            <h2 className="text-lg font-bold mb-3">💡 Conditions pour accepter une course</h2>
-            <div className="space-y-2 text-sm">
-              <p className={user?.isVerified ? 'text-green-600' : 'text-orange-600'}>
-                {user?.isVerified ? '✅' : '❌'} Compte vérifié
-              </p>
-              <p className={user?.driverProfile?.isAvailable ? 'text-green-600' : 'text-orange-600'}>
-                {user?.driverProfile?.isAvailable ? '✅' : '❌'} Disponibilité activée
-              </p>
-              <p className={user?.driverProfile ? 'text-green-600' : 'text-orange-600'}>
-                {user?.driverProfile ? '✅' : '❌'} Profil chauffeur créé
-              </p>
-              <p className="text-gray-600">
-                ℹ️ Type de véhicule correspondant requis
-              </p>
-              <p className="text-gray-600">
-                ℹ️ Une seule course active à la fois
-              </p>
             </div>
           </Card>
         </div>

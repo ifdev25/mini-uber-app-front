@@ -98,14 +98,14 @@ export interface Ride {
 }
 
 // ============================================
-// Ride Estimate Types
+// Ride Estimate Types (Frontend only)
 // ============================================
 
 export interface RideEstimate {
   distance: number; // km
   duration: number; // minutes
   price: number; // €
-  vehicleType: VehicleType;
+  vehicleType?: VehicleType;
 }
 
 // ============================================
@@ -138,15 +138,6 @@ export interface RegisterResponse {
   token: string;
 }
 
-// Ride Estimate Request
-export interface EstimateRideData {
-  pickupLat: number;
-  pickupLng: number;
-  dropoffLat: number;
-  dropoffLng: number;
-  vehicleType: VehicleType;
-}
-
 // Create Ride Request
 export interface CreateRideData {
   passenger: string; // IRI du passager (ex: "/api/users/1")
@@ -157,24 +148,12 @@ export interface CreateRideData {
   dropoffLatitude: number;
   dropoffLongitude: number;
   vehicleType: VehicleType;
+  estimatedPrice: number;
+  estimatedDistance: number;
+  estimatedDuration: number;
 }
 
 // Update Ride Status
-export interface UpdateRideStatusData {
-  status: RideStatus;
-}
-
-// Update Driver Location
-export interface UpdateDriverLocationData {
-  lat: number;
-  lng: number;
-}
-
-// Update Driver Availability
-export interface UpdateDriverAvailabilityData {
-  isAvailable: boolean;
-}
-
 // Create Driver Profile
 export interface CreateDriverData {
   user: string; // IRI "/api/users/{id}"
@@ -239,69 +218,13 @@ export interface ApiError {
   '@type': 'hydra:Error';
   'hydra:title': string;
   'hydra:description': string;
+  message?: string;
   violations?: Violation[];
 }
 
 export interface Violation {
   propertyPath: string;
   message: string;
-}
-
-// ============================================
-// Mercure Notification Types
-// ============================================
-
-export type MercureEventType =
-  | 'ride_accepted'
-  | 'ride_started'
-  | 'ride_completed'
-  | 'ride_cancelled'
-  | 'driver_location'
-  | 'new_ride';
-
-export interface MercureNotification {
-  type: MercureEventType;
-  data: any;
-}
-
-// Specific notification data types
-export interface RideAcceptedData {
-  rideId: number;
-  driver: Driver;
-}
-
-export interface RideStartedData {
-  rideId: number;
-}
-
-export interface RideCompletedData {
-  rideId: number;
-  finalPrice: number;
-}
-
-export interface RideCancelledData {
-  rideId: number;
-  reason?: string;
-}
-
-export interface DriverLocationData {
-  lat: number;
-  lng: number;
-}
-
-export interface NewRideData {
-  rideId: number;
-  pickup: {
-    address: string;
-    lat: number;
-    lng: number;
-  };
-  dropoff: {
-    address: string;
-    lat: number;
-    lng: number;
-  };
-  price: number;
 }
 
 // ============================================
@@ -324,52 +247,4 @@ export interface Address {
 export interface Place {
   address: Address;
   location: Location;
-}
-
-// ============================================
-// Form Types
-// ============================================
-
-export interface NewRideFormData {
-  pickupAddress: string;
-  pickupLatitude: number;
-  pickupLongitude: number;
-  dropoffAddress: string;
-  dropoffLatitude: number;
-  dropoffLongitude: number;
-  vehicleType: VehicleType;
-}
-
-export interface ProfileFormData {
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string;
-  profilePictureUrl?: string;
-}
-
-export interface DriverProfileFormData {
-  vehicleModel: string;
-  vehicleType: VehicleType;
-  vehicleColor: string;
-  licenceNumber: string;
-}
-
-// ============================================
-// Statistics Types
-// ============================================
-
-export interface PassengerStats {
-  totalRides: number;
-  averageRating: number;
-  totalSpent: number;
-}
-
-export interface DriverStats {
-  totalRides: number;
-  averageRating: number;
-  totalEarnings: number;
-  totalDrivingTime: number; // en minutes
-  ridesThisWeek: number;
-  earningsThisWeek: number;
 }

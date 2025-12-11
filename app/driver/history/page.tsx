@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useMyRides } from '@/hooks/useMyRides';
+import { useRides } from '@/hooks/useRides';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
 import { Ride, RideStatus, User } from '@/lib/types';
 import toast from 'react-hot-toast';
@@ -15,9 +15,14 @@ export default function DriverHistoryPage() {
   const { user, isLoadingUser } = useAuth();
   const [statusFilter, setStatusFilter] = useState<RideStatus | 'all'>('all');
 
-  // ✅ Utiliser le nouveau hook qui appelle /api/my/rides
-  // Cet endpoint filtre automatiquement par l'utilisateur connecté via le JWT
-  const { rides: allRides, isLoading: ridesLoading } = useMyRides();
+  // Récupérer les courses du driver via l'API avec filtres
+  const driverId = user?.driverProfile?.id;
+  const { data: ridesData, isLoading: ridesLoading } = useRides(
+    driverId ? { driver: driverId } : undefined
+  );
+
+  // Extraire les courses de la collection Hydra
+  const allRides = ridesData?.['hydra:member'] || [];
 
   // Filtrer les courses par statut côté client
   const rides = statusFilter === 'all'
