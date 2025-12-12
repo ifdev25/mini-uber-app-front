@@ -126,3 +126,18 @@ export function useAvailableDrivers() {
     retry: 2, // Réessayer 2 fois en cas d'échec
   });
 }
+
+/**
+ * Hook pour récupérer l'historique des courses du driver connecté
+ * Utilise l'endpoint optimisé /api/driver/history
+ */
+export function useDriverHistory(filters?: {
+  status?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  return useQuery({
+    queryKey: ['driver-history', filters],
+    queryFn: () => api.getDriverHistory(filters),
+  });
+}

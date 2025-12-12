@@ -248,3 +248,51 @@ export interface Place {
   address: Address;
   location: Location;
 }
+
+// ============================================
+// Driver History Endpoint Types
+// ============================================
+
+export interface DriverHistoryRide {
+  id: number;
+  status: RideStatus;
+  passenger: {
+    id: number;
+    name: string;
+    phone: string;
+    rating: number;
+  };
+  pickup: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  dropoff: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  price: {
+    estimated: number;
+    final: number | null;
+  };
+  distance: number;
+  duration: number;
+  vehicleType: VehicleType;
+  dates: {
+    created: string;
+    accepted: string | null;
+    started: string | null;
+    completed: string | null;
+  };
+}
+
+export interface DriverHistoryResponse {
+  success: boolean;
+  data: DriverHistoryRide[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+  };
+}

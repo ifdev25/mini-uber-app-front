@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useRides } from '@/hooks/useRides';
+import { useDriverHistory } from '@/hooks/useRides';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
-import { Ride, RideStatus, User } from '@/lib/types';
+import { DriverHistoryRide, RideStatus } from '@/lib/types';
 import toast from 'react-hot-toast';
 
 export default function DriverHistoryPage() {
@@ -15,16 +15,17 @@ export default function DriverHistoryPage() {
   const { user, isLoadingUser } = useAuth();
   const [statusFilter, setStatusFilter] = useState<RideStatus | 'all'>('all');
 
-  // Récupérer les courses du driver via l'API avec filtres
-  const driverId = user?.driverProfile?.id;
-  const { data: ridesData, isLoading: ridesLoading } = useRides(
-    driverId ? { driver: driverId } : undefined
-  );
+  // Récupérer TOUTES les courses du driver (sans filtre status)
+  // pour que les statistiques soient toujours correctes
+  const { data: historyData, isLoading: ridesLoading } = useDriverHistory({
+    limit: 1000, // Récupérer toutes les courses
+  });
 
-  // Extraire les courses de la collection Hydra
-  const allRides = ridesData?.['hydra:member'] || [];
+  // Extraire toutes les courses de la réponse
+  const allRides = historyData?.data || [];
 
-  // Filtrer les courses par statut côté client
+  // Filtrer les courses côté client selon le statusFilter
+  // Cela permet de garder les stats globales constantes
   const rides = statusFilter === 'all'
     ? allRides
     : allRides.filter(r => r.status === statusFilter);
@@ -67,10 +68,9 @@ export default function DriverHistoryPage() {
   };
 
   // Composant pour une carte de course
-  const RideCard = ({ ride }: { ride: Ride }) => {
+  const RideCard = ({ ride }: { ride: DriverHistoryRide }) => {
     const statusConfig = RIDE_STATUS[ride.status];
     const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
-    const passenger = typeof ride.passenger === 'object' ? ride.passenger as User : null;
 
     return (
       <Card
@@ -84,7 +84,7 @@ export default function DriverHistoryPage() {
               <span className="font-semibold">Course #{ride.id}</span>
             </div>
             <p className="text-sm text-gray-500">
-              {formatDate(ride.createdAt)}
+              {formatDate(ride.dates.created)}
             </p>
           </div>
           <div
@@ -110,7 +110,7 @@ export default function DriverHistoryPage() {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Départ</p>
               <p className="text-sm font-medium truncate">
-                {ride.pickupAddress || <span className="text-red-500">Non disponible</span>}
+                {ride.pickup.address || <span className="text-red-500">Non disponible</span>}
               </p>
             </div>
           </div>
@@ -119,7 +119,7 @@ export default function DriverHistoryPage() {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Arrivée</p>
               <p className="text-sm font-medium truncate">
-                {ride.dropoffAddress || <span className="text-red-500">Non disponible</span>}
+                {ride.dropoff.address || <span className="text-red-500">Non disponible</span>}
               </p>
             </div>
           </div>
@@ -129,41 +129,38 @@ export default function DriverHistoryPage() {
           <div className="flex items-center gap-3 text-sm text-gray-600">
             <span>{vehicleConfig?.icon || '🚗'} {vehicleConfig?.label || 'Standard'}</span>
             <span>
-              {ride.estimatedDistance ? `${ride.estimatedDistance.toFixed(1)} km` : <span className="text-red-500">? km</span>}
+              {ride.distance ? `${ride.distance.toFixed(1)} km` : <span className="text-red-500">? km</span>}
             </span>
             <span>
-              {ride.estimatedDuration ? `${ride.estimatedDuration} min` : <span className="text-red-500">? min</span>}
+              {ride.duration ? `${ride.duration} min` : <span className="text-red-500">? min</span>}
             </span>
           </div>
           <div className="text-lg font-bold text-green-600">
-            {ride.finalPrice
-              ? `${ride.finalPrice.toFixed(2)} €`
-              : ride.estimatedPrice
-              ? `${ride.estimatedPrice.toFixed(2)} €`
+            {ride.price.final
+              ? `${ride.price.final.toFixed(2)} €`
+              : ride.price.estimated
+              ? `${ride.price.estimated.toFixed(2)} €`
               : <span className="text-red-500">? €</span>
             }
           </div>
         </div>
 
-        {passenger && (
-          <div className="mt-3 pt-3 border-t text-sm">
-            <span className="text-gray-500">Passager: </span>
-            <span className="font-medium">
-              {passenger.firstName} {passenger.lastName}
-            </span>
-            {passenger.rating && (
-              <span className="ml-2">⭐ {passenger.rating.toFixed(1)}</span>
-            )}
-          </div>
-        )}
+        <div className="mt-3 pt-3 border-t text-sm">
+          <span className="text-gray-500">Passager: </span>
+          <span className="font-medium">{ride.passenger.name}</span>
+          {ride.passenger.rating && (
+            <span className="ml-2">⭐ {ride.passenger.rating.toFixed(1)}</span>
+          )}
+        </div>
       </Card>
     );
   };
 
-  // Calcul des statistiques
-  const completedRides = rides.filter((r) => r.status === 'completed');
-  const totalEarnings = completedRides.reduce((sum, r) => sum + (r.finalPrice || r.estimatedPrice), 0);
-  const totalDistance = completedRides.reduce((sum, r) => sum + r.estimatedDistance, 0);
+  // Calcul des statistiques sur TOUTES les courses (pas sur les courses filtrées)
+  // pour que les stats restent constantes même quand on change de filtre
+  const completedRides = allRides.filter((r) => r.status === 'completed');
+  const totalEarnings = completedRides.reduce((sum, r) => sum + (r.price.final || r.price.estimated), 0);
+  const totalDistance = completedRides.reduce((sum, r) => sum + r.distance, 0);
   const averageRating = user?.rating || 0;
 
   return (
@@ -181,11 +178,11 @@ export default function DriverHistoryPage() {
         </Button>
       </div>
 
-      {/* Statistiques globales */}
+      {/* Statistiques globales - Basées sur TOUTES les courses */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses totales</p>
-          <p className="text-3xl font-bold text-blue-600">{rides.length}</p>
+          <p className="text-3xl font-bold text-blue-600">{allRides.length}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses terminées</p>

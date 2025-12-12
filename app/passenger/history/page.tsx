@@ -14,7 +14,7 @@ export default function RideHistoryPage() {
   const { user, isLoadingUser: userLoading } = useAuth();
   const [statusFilter, setStatusFilter] = useState<RideStatus | 'all'>('all');
 
-  // Construire les filtres pour l'API
+  // Construire les filtres pour l'API (SANS le status pour garder les stats constantes)
   const filters: Record<string, any> = {};
 
   // IMPORTANT: Filtrer par l'utilisateur connecté (passager)
@@ -23,15 +23,20 @@ export default function RideHistoryPage() {
     filters.passenger = user.id;
   }
 
-  // Filtrer par statut si sélectionné
-  if (statusFilter !== 'all') {
-    filters.status = statusFilter;
-  }
-
   // Trier par date décroissante (plus récentes en premier)
   filters['order[createdAt]'] = 'desc';
 
   const { data: ridesCollection, isLoading: ridesLoading } = useRides(filters);
+
+  // Support des deux formats : 'hydra:member' (JSON) et 'member' (JS parsé)
+  // Récupérer TOUTES les courses pour que les statistiques restent constantes
+  const allRides = ridesCollection?.['hydra:member'] || ridesCollection?.member || [];
+
+  // Filtrer côté client selon le statusFilter
+  // Cela permet de garder les stats globales constantes
+  const rides = statusFilter === 'all'
+    ? allRides
+    : allRides.filter(r => r.status === statusFilter);
 
   // Rediriger si non connecté ou pas un passager
   useEffect(() => {
@@ -48,9 +53,6 @@ export default function RideHistoryPage() {
     );
   }
 
-  // Support des deux formats : 'hydra:member' (JSON) et 'member' (JS parsé)
-  const rides = ridesCollection?.['hydra:member'] || ridesCollection?.member || [];
-
   // Fonction pour formater la date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -65,8 +67,16 @@ export default function RideHistoryPage() {
 
   // Composant pour une carte de course
   const RideCard = ({ ride }: { ride: Ride }) => {
-    const statusConfig = RIDE_STATUS[ride.status];
-    const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
+    const statusConfig = RIDE_STATUS[ride.status] || { icon: '❓', label: 'Inconnu' };
+    const vehicleConfig = VEHICLE_TYPES[ride.vehicleType] || { icon: '🚗', label: 'Standard' };
+
+    // Vérifier si les données sont complètes
+    const isDataComplete = Boolean(
+      ride.pickupAddress &&
+      ride.dropoffAddress &&
+      ride.estimatedDistance &&
+      ride.estimatedPrice
+    );
 
     // Extraction intelligente du driver (peut être User direct ou Driver avec user)
     const driver = typeof ride.driver === 'object' ? ride.driver as any : null;
@@ -107,13 +117,19 @@ export default function RideHistoryPage() {
           </div>
         </div>
 
+        {!isDataComplete && (
+          <div className="mb-3 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700">
+            ⚠️ Données incomplètes - Certaines informations ne sont pas disponibles
+          </div>
+        )}
+
         <div className="space-y-2 mb-3">
           <div className="flex items-start gap-2">
             <span className="text-green-600 mt-1">📍</span>
             <div className="flex-1">
               <p className="text-sm text-gray-500">Départ</p>
               <p className="text-sm font-medium truncate">
-                {ride.pickupAddress || <span className="text-red-500">Non disponible</span>}
+                {ride.pickupAddress || <span className="text-orange-500 italic">Adresse non disponible</span>}
               </p>
             </div>
           </div>
@@ -122,7 +138,7 @@ export default function RideHistoryPage() {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Arrivée</p>
               <p className="text-sm font-medium truncate">
-                {ride.dropoffAddress || <span className="text-red-500">Non disponible</span>}
+                {ride.dropoffAddress || <span className="text-orange-500 italic">Adresse non disponible</span>}
               </p>
             </div>
           </div>
@@ -130,20 +146,20 @@ export default function RideHistoryPage() {
 
         <div className="flex justify-between items-center pt-3 border-t">
           <div className="flex items-center gap-3 text-sm text-gray-600">
-            <span>{vehicleConfig?.icon || '🚗'} {vehicleConfig?.label || 'Standard'}</span>
+            <span>{vehicleConfig?.icon} {vehicleConfig?.label}</span>
             <span>
-              {ride.estimatedDistance ? `${ride.estimatedDistance.toFixed(1)} km` : <span className="text-red-500">? km</span>}
+              {ride.estimatedDistance ? `📏 ${ride.estimatedDistance.toFixed(1)} km` : <span className="text-orange-500">📏 N/A</span>}
             </span>
             <span>
-              {ride.estimatedDuration ? `${ride.estimatedDuration} min` : <span className="text-red-500">? min</span>}
+              {ride.estimatedDuration ? `⏱️ ${ride.estimatedDuration} min` : <span className="text-orange-500">⏱️ N/A</span>}
             </span>
           </div>
-          <div className="text-lg font-bold text-blue-600">
+          <div className={`text-lg font-bold ${ride.finalPrice || ride.estimatedPrice ? 'text-blue-600' : 'text-orange-500'}`}>
             {ride.finalPrice
               ? `${ride.finalPrice.toFixed(2)} €`
               : ride.estimatedPrice
               ? `${ride.estimatedPrice.toFixed(2)} €`
-              : <span className="text-red-500">? €</span>
+              : 'Prix N/A'
             }
           </div>
         </div>
@@ -178,22 +194,22 @@ export default function RideHistoryPage() {
         </Button>
       </div>
 
-      {/* Statistiques globales */}
+      {/* Statistiques globales - Basées sur TOUTES les courses */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses totales</p>
-          <p className="text-3xl font-bold text-blue-600">{rides.length}</p>
+          <p className="text-3xl font-bold text-blue-600">{allRides.length}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses terminées</p>
           <p className="text-3xl font-bold text-green-600">
-            {rides.filter((r) => r.status === 'completed').length}
+            {allRides.filter((r) => r.status === 'completed').length}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Total dépensé</p>
           <p className="text-3xl font-bold text-blue-600">
-            {rides
+            {allRides
               .filter((r) => r.finalPrice)
               .reduce((sum, r) => sum + (r.finalPrice || 0), 0)
               .toFixed(2)}{' '}

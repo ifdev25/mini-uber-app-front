@@ -16,6 +16,7 @@ import {
   Review,
   HydraCollection,
   ApiError,
+  DriverHistoryResponse,
 } from './types';
 import { API_CONFIG, STORAGE_KEYS } from './constants';
 
@@ -260,9 +261,8 @@ class ApiClient {
    */
   async getRides(filters?: Record<string, any>): Promise<HydraCollection<Ride>> {
     const params = new URLSearchParams(filters).toString();
-    return this.request<HydraCollection<Ride>>(
-      `/api/rides${params ? `?${params}` : ''}`
-    );
+    const url = `/api/rides${params ? `?${params}` : ''}`;
+    return this.request<HydraCollection<Ride>>(url);
   }
 
   /**
@@ -271,6 +271,26 @@ class ApiClient {
    */
   async getRide(id: number): Promise<Ride> {
     return this.request<Ride>(`/api/rides/${id}`);
+  }
+
+  /**
+   * Récupérer l'historique des courses du driver connecté
+   * GET /api/driver/history
+   * Endpoint optimisé qui retourne automatiquement les courses du driver authentifié
+   */
+  async getDriverHistory(filters?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<DriverHistoryResponse> {
+    const params = new URLSearchParams();
+
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+
+    const url = `/api/driver/history${params.toString() ? `?${params.toString()}` : ''}`;
+    return this.request<DriverHistoryResponse>(url);
   }
 
   /**
