@@ -418,40 +418,19 @@ class ApiClient {
 
   /**
    * Mettre à jour la disponibilité du chauffeur
-   * PATCH /api/drivers/availability (préféré) ou PATCH /api/drivers/{id} (fallback)
-   * Identifie automatiquement le chauffeur via le token JWT
+   * PATCH /api/drivers/{id}
+   * Note: L'endpoint /api/drivers/availability n'existe pas dans le backend
+   * On utilise donc l'endpoint standard d'API Platform
    */
   async updateDriverAvailability(isAvailable: boolean): Promise<Driver> {
-    try {
-      // Essayer l'endpoint dédié d'abord
-      return await this.request<Driver>('/api/drivers/availability', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/merge-patch+json',
-        },
-        body: JSON.stringify({ isAvailable }),
-      });
-    } catch (error) {
-      // Si 404, utiliser le fallback PATCH /api/drivers/{id}
-      const is404 = error instanceof Error &&
-                    (error.message.includes('404') || error.message.includes('Not Found'));
-
-      if (is404) {
-        console.warn('⚠️ Endpoint /api/drivers/availability non implémenté. Utilisation du fallback.');
-
-        // Récupérer l'ID du driver via /api/me
-        const user = await this.getMe();
-        if (!user.driverProfile?.id) {
-          throw new Error('Driver profile not found for current user');
-        }
-
-        // Utiliser PATCH /api/drivers/{id}
-        return await this.updateDriver(user.driverProfile.id, { isAvailable });
-      }
-
-      // Re-throw les autres erreurs
-      throw error;
+    // Récupérer l'ID du driver via /api/me
+    const user = await this.getMe();
+    if (!user.driverProfile?.id) {
+      throw new Error('Profil chauffeur introuvable');
     }
+
+    // Utiliser PATCH /api/drivers/{id} avec application/merge-patch+json
+    return await this.updateDriver(user.driverProfile.id, { isAvailable });
   }
 
   /**
