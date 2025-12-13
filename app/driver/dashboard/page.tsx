@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,14 +24,9 @@ export default function DriverDashboardPage() {
   const acceptRide = useAcceptRide();
   const availabilityMutation = useDriverAvailability();
 
-  // Polling pour rafraîchir les courses toutes les 5 secondes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [refetch]);
+  // Note: Polling géré automatiquement par React Query dans le hook useRides
+  // Pas besoin de polling manuel ici (optimisation performance)
+  // refetch() est disponible pour le bouton "Actualiser" manuel
 
   // Rediriger si non connecté ou pas un chauffeur
   useEffect(() => {
@@ -165,8 +160,8 @@ export default function DriverDashboardPage() {
     }
   );
 
-  // Gérer le toggle de disponibilité
-  const handleToggleAvailability = async () => {
+  // Gérer le toggle de disponibilité (optimisé avec useCallback)
+  const handleToggleAvailability = useCallback(async () => {
     if (!user?.driverProfile) {
       toast.error('Profil chauffeur introuvable. Veuillez créer un profil chauffeur.');
       return;
@@ -185,10 +180,10 @@ export default function DriverDashboardPage() {
     } catch (error) {
       // L'erreur est déjà gérée par useApiMutation avec toast
     }
-  };
+  }, [user?.driverProfile, isAvailable, availabilityMutation, refetchUser]);
 
-  // Accepter une course
-  const handleAcceptRide = (rideId: number) => {
+  // Accepter une course (optimisé avec useCallback)
+  const handleAcceptRide = useCallback((rideId: number) => {
     // Ne pas permettre d'accepter si une course est déjà en cours d'acceptation
     if (acceptingRideId !== null) {
       alert('⏳ Une course est déjà en cours d\'acceptation, veuillez patienter...');
@@ -264,7 +259,7 @@ export default function DriverDashboardPage() {
         },
       });
     }
-  };
+  }, [acceptingRideId, activeRide, user, acceptRide, router]);
 
   if (isLoadingUser || ridesLoading) {
     return (

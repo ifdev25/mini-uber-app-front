@@ -39,6 +39,13 @@ export default function BookRidePage() {
   const [isEstimating, setIsEstimating] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
 
+  // État pour gérer le centre et le zoom de la carte
+  const [mapCenter, setMapCenter] = useState<[number, number]>([
+    MAP_CONFIG.DEFAULT_CENTER.lat,
+    MAP_CONFIG.DEFAULT_CENTER.lng
+  ]);
+  const [mapZoom, setMapZoom] = useState(MAP_CONFIG.DEFAULT_ZOOM);
+
   // Rediriger si non connecté ou pas un passager
   useEffect(() => {
     if (!isLoadingUser) {
@@ -96,6 +103,44 @@ export default function BookRidePage() {
       setEstimate(null);
     }
   }, [pickup, dropoff, selectedVehicle]);
+
+  // Mettre à jour le centre et le zoom de la carte quand les adresses changent
+  useEffect(() => {
+    if (pickup && dropoff) {
+      // Calculer le centre entre pickup et dropoff
+      const centerLat = (pickup.lat + dropoff.lat) / 2;
+      const centerLng = (pickup.lng + dropoff.lng) / 2;
+      setMapCenter([centerLat, centerLng]);
+
+      // Calculer le zoom pour afficher les deux points
+      const latDiff = Math.abs(pickup.lat - dropoff.lat);
+      const lngDiff = Math.abs(pickup.lng - dropoff.lng);
+      const maxDiff = Math.max(latDiff, lngDiff);
+
+      // Ajuster le zoom en fonction de la distance
+      let zoom = MAP_CONFIG.DEFAULT_ZOOM;
+      if (maxDiff > 1) zoom = 9;        // Très loin (> 100 km)
+      else if (maxDiff > 0.5) zoom = 10; // Loin (50-100 km)
+      else if (maxDiff > 0.2) zoom = 11; // Moyen (20-50 km)
+      else if (maxDiff > 0.1) zoom = 12; // Proche (10-20 km)
+      else if (maxDiff > 0.05) zoom = 13; // Très proche (5-10 km)
+      else zoom = 14;                    // Très très proche (< 5 km)
+
+      setMapZoom(zoom);
+    } else if (pickup) {
+      // Si seulement pickup, centrer sur pickup
+      setMapCenter([pickup.lat, pickup.lng]);
+      setMapZoom(13);
+    } else if (dropoff) {
+      // Si seulement dropoff, centrer sur dropoff
+      setMapCenter([dropoff.lat, dropoff.lng]);
+      setMapZoom(13);
+    } else {
+      // Revenir au centre par défaut (Paris)
+      setMapCenter([MAP_CONFIG.DEFAULT_CENTER.lat, MAP_CONFIG.DEFAULT_CENTER.lng]);
+      setMapZoom(MAP_CONFIG.DEFAULT_ZOOM);
+    }
+  }, [pickup, dropoff]);
 
   // Réserver la course
   const handleBookRide = () => {
@@ -309,15 +354,15 @@ export default function BookRidePage() {
         <div className="order-2 lg:order-1">
           <Card className="p-4">
             <MapComponent
-              center={[MAP_CONFIG.DEFAULT_CENTER.lat, MAP_CONFIG.DEFAULT_CENTER.lng]}
-              zoom={MAP_CONFIG.DEFAULT_ZOOM}
+              center={mapCenter}
+              zoom={mapZoom}
               className="h-[500px] w-full rounded-lg"
               onMapClick={handleMapClick}
               markers={markers}
               showUserLocation={true}
             />
             <p className="text-sm text-gray-500 mt-2">
-              Cliquez sur la carte pour définir le point de départ puis le point d'arrivée
+              💡 Cliquez sur la carte pour définir le point de départ puis le point d'arrivée, ou utilisez la recherche d'adresse ci-contre
             </p>
           </Card>
         </div>

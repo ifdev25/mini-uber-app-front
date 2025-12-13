@@ -25,11 +25,20 @@ export function useCreateRide() {
 
 /**
  * Hook pour récupérer la liste des courses de l'utilisateur
+ * Avec polling intelligent pour le dashboard driver
  */
 export function useRides(filters?: Record<string, any>) {
   return useQuery({
     queryKey: ['rides', filters],
     queryFn: () => api.getRides(filters),
+    // Polling intelligent : arrêter si l'onglet n'est pas visible
+    refetchInterval: () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return false; // Arrêter le polling si l'onglet est caché
+      }
+      return 8000; // Rafraîchir toutes les 8 secondes (au lieu de 5s avant)
+    },
+    staleTime: 5000, // Les données sont fraîches pendant 5s
   });
 }
 
@@ -37,23 +46,37 @@ export function useRides(filters?: Record<string, any>) {
  * Hook pour récupérer une course par ID
  * Active le rafraîchissement automatique pour détecter les changements de statut
  * Arrête automatiquement le polling quand la course est terminée ou annulée
+ * Optimisé avec Page Visibility API pour économiser les ressources
  */
 export function useRide(rideId: number) {
   return useQuery({
     queryKey: ['rides', rideId],
     queryFn: () => api.getRide(rideId),
     enabled: !!rideId,
-    // Rafraîchir toutes les 3s uniquement si la course est active (pending, accepted, in_progress)
+    // Polling intelligent : adapte la fréquence selon le statut et la visibilité de la page
     refetchInterval: (query) => {
+      // Arrêter le polling si l'onglet n'est pas visible (économie de ressources)
+      if (typeof document !== 'undefined' && document.hidden) {
+        return false;
+      }
+
       const ride = query.state.data as Ride | undefined;
+
       // Arrêter le polling si la course est terminée ou annulée
       if (ride && (ride.status === 'completed' || ride.status === 'cancelled')) {
-        return false; // Arrêter le polling
+        return false;
       }
-      return 3000; // Continuer le polling toutes les 3 secondes
+
+      // Polling rapide pour les courses actives
+      if (ride && (ride.status === 'in_progress' || ride.status === 'accepted')) {
+        return 3000; // 3 secondes pour les courses actives
+      }
+
+      // Polling plus lent pour les courses en attente
+      return 8000; // 8 secondes pour pending
     },
-    staleTime: 0, // Considérer les données comme obsolètes immédiatement
-    gcTime: 0, // Ne pas garder les données en cache
+    staleTime: 2000, // Les données sont fraîches pendant 2s
+    gcTime: 10000, // Garder en cache pendant 10s
     refetchOnWindowFocus: true, // Rafraîchir quand l'utilisateur revient sur l'onglet
     retry: 2, // Réessayer 2 fois en cas d'échec
   });
@@ -107,6 +130,7 @@ export function useCancelRide() {
 /**
  * Hook pour récupérer les chauffeurs disponibles
  * Note: On récupère tous les drivers car l'API ne retourne pas le champ isAvailable
+ * Optimisé avec Page Visibility API
  */
 export function useAvailableDrivers() {
   return useQuery({
@@ -122,7 +146,14 @@ export function useAvailableDrivers() {
         throw error;
       }
     },
-    refetchInterval: 10000, // Rafraîchir toutes les 10 secondes
+    // Polling intelligent : arrêter si l'onglet n'est pas visible
+    refetchInterval: () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return false; // Arrêter le polling si l'onglet est caché
+      }
+      return 10000; // Rafraîchir toutes les 10 secondes si visible
+    },
+    staleTime: 5000, // Les données sont fraîches pendant 5s
     retry: 2, // Réessayer 2 fois en cas d'échec
   });
 }

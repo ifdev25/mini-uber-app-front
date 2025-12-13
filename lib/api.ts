@@ -77,8 +77,9 @@ class ApiClient {
    */
   async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit & { silent?: boolean } = {}
   ): Promise<T> {
+    const { silent, ...fetchOptions } = options;
     // Déterminer le Content-Type approprié
     // API Platform utilise application/ld+json par défaut
     // Sauf pour les endpoints custom non-API Platform comme /api/login et /api/ride-estimates
@@ -101,15 +102,19 @@ class ApiClient {
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        ...options,
+        ...fetchOptions,
         headers,
+        // Note: credentials: 'include' retiré car non requis par le backend
+        // et peut causer des erreurs CORS si le backend n'est pas configuré pour
       });
 
       // Gérer les erreurs HTTP
       if (!response.ok) {
-        console.error('❌ Erreur HTTP:', response.status, response.statusText);
-        console.error('❌ URL:', `${this.baseUrl}${endpoint}`);
-        console.error('❌ Méthode:', options.method || 'GET');
+        if (!silent) {
+          console.error('❌ Erreur HTTP:', response.status, response.statusText);
+          console.error('❌ URL:', `${this.baseUrl}${endpoint}`);
+          console.error('❌ Méthode:', fetchOptions.method || 'GET');
+        }
 
         // Si 401, le token a expiré
         if (response.status === 401) {
@@ -124,7 +129,9 @@ class ApiClient {
         let errorDetails: any = null;
         try {
           const error: ApiError = await response.json();
-          console.error('❌ Réponse d\'erreur du backend:', error);
+          if (!silent) {
+            console.error('❌ Réponse d\'erreur du backend:', error);
+          }
           errorDetails = error;
 
           // Afficher les violations si elles existent
@@ -143,7 +150,9 @@ class ApiClient {
           }
         } catch (parseError) {
           // Si pas de JSON, utiliser le status text
-          console.error('❌ Impossible de parser la réponse JSON:', parseError);
+          if (!silent) {
+            console.error('❌ Impossible de parser la réponse JSON:', parseError);
+          }
           errorMessage = `Erreur ${response.status}: ${response.statusText}`;
 
           // Messages spécifiques pour les codes HTTP communs
@@ -152,7 +161,9 @@ class ApiClient {
           }
         }
 
-        console.error('❌ Message d\'erreur final:', errorMessage);
+        if (!silent) {
+          console.error('❌ Message d\'erreur final:', errorMessage);
+        }
         throw new Error(errorMessage);
       }
 
@@ -386,15 +397,22 @@ class ApiClient {
           currentLatitude: lat,
           currentLongitude: lng,
         }),
+        silent: true, // Désactiver les logs d'erreur (fonctionnalité optionnelle)
       });
     } catch (error) {
-      // Gérer silencieusement l'erreur 404 si l'endpoint n'existe pas encore dans le backend
+      // Gérer silencieusement TOUTES les erreurs de cet endpoint
+      // car c'est une fonctionnalité optionnelle (suivi GPS en temps réel)
+      // Si l'endpoint n'est pas implémenté côté backend, cela ne doit pas bloquer l'app
+
+      // Log en mode debug uniquement (pas d'erreur visible pour l'utilisateur)
       if (error instanceof Error && error.message.includes('404')) {
-        console.warn('⚠️ Endpoint /api/drivers/location non implémenté dans le backend. Voir BACKEND_LOCATION_ENDPOINT_MISSING.md');
-        return null;
+        // Endpoint non implémenté - silencieux total
+      } else {
+        // Autre erreur - log discret en console seulement
+        console.debug('⚠️ GPS update failed (optional feature):', error instanceof Error ? error.message : error);
       }
-      // Re-throw les autres erreurs
-      throw error;
+
+      return null;
     }
   }
 

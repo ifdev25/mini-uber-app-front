@@ -17,19 +17,13 @@ export default function DriverRidePage() {
   const { user, isLoadingUser } = useAuth();
   const rideId = parseInt(params.id as string);
 
-  const { data: ride, isLoading: rideLoading, refetch } = useRide(rideId);
+  const { data: ride, isLoading: rideLoading } = useRide(rideId);
   const updateStatus = useUpdateRideStatus();
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  // Polling pour rafraîchir la course toutes les 5 secondes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refetch();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [refetch]);
+  // Note: Polling géré automatiquement par React Query dans useRide
+  // avec polling intelligent adapté au statut de la course (optimisation performance)
 
   // Rediriger si non connecté ou pas un chauffeur
   useEffect(() => {
@@ -131,11 +125,12 @@ export default function DriverRidePage() {
       { rideId: ride.id, status: newStatus },
       {
         onSuccess: (updatedRide) => {
-          refetch();
+          // Note: Pas besoin de refetch() ici, React Query invalide automatiquement
+          // la query grâce à invalidateQueries dans useUpdateRideStatus
 
           // Rediriger vers le dashboard si la course est terminée
           if (newStatus === 'completed') {
-            toast.success('Course terminée avec succès !');
+            // Toast déjà affiché par le hook useUpdateRideStatus
             setTimeout(() => {
               router.push('/driver/dashboard');
             }, 1500);
