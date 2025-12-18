@@ -20,6 +20,26 @@ import {
 } from './types';
 import { API_CONFIG, STORAGE_KEYS } from './constants';
 
+/**
+ * Erreur personnalisée pour les violations de validation
+ * Permet de transmettre les erreurs de champ de manière structurée
+ */
+export class ValidationError extends Error {
+  violations: Array<{ propertyPath: string; message: string }>;
+  statusCode: number;
+
+  constructor(
+    message: string,
+    violations: Array<{ propertyPath: string; message: string }>,
+    statusCode: number = 422
+  ) {
+    super(message);
+    this.name = 'ValidationError';
+    this.violations = violations;
+    this.statusCode = statusCode;
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
@@ -110,12 +130,6 @@ class ApiClient {
 
       // Gérer les erreurs HTTP
       if (!response.ok) {
-        if (!silent) {
-          console.error('❌ Erreur HTTP:', response.status, response.statusText);
-          console.error('❌ URL:', `${this.baseUrl}${endpoint}`);
-          console.error('❌ Méthode:', fetchOptions.method || 'GET');
-        }
-
         // Si 401, le token a expiré
         if (response.status === 401) {
           this.clearToken();
@@ -129,49 +143,84 @@ class ApiClient {
         let errorDetails: any = null;
         try {
           const error: ApiError = await response.json();
-          if (!silent) {
-            console.error('❌ Réponse d\'erreur du backend:', error);
-          }
           errorDetails = error;
 
-          // Afficher les violations si elles existent
-          if (error.violations && error.violations.length > 0) {
-            const violationMessages = error.violations
-              .map(v => `${v.propertyPath}: ${v.message}`)
-              .join(', ');
-            errorMessage = `Erreur de validation: ${violationMessages}`;
-          } else {
-            errorMessage = error['hydra:description'] || error['hydra:title'] || error.message || errorMessage;
+          // Gestion des erreurs de validation (422 avec violations)
+          // Support de DEUX formats :
+          // 1. Format /api/register : { violations: { email: "message", firstName: "message" } }
+          // 2. Format API Platform : { violations: [{ propertyPath: "email", message: "message" }] }
+          if (error.violations) {
+            let normalizedViolations: Array<{ propertyPath: string; message: string }> = [];
+
+            // Cas 1 : violations est un objet (format /api/register)
+            if (typeof error.violations === 'object' && !Array.isArray(error.violations)) {
+              normalizedViolations = Object.entries(error.violations).map(([field, message]) => ({
+                propertyPath: field,
+                message: message as string,
+              }));
+            }
+            // Cas 2 : violations est un array (format API Platform)
+            else if (Array.isArray(error.violations)) {
+              normalizedViolations = error.violations;
+            }
+
+            if (normalizedViolations.length > 0) {
+              // Lancer une ValidationError avec les violations structurées
+              // Le message sera géré par le hook qui affiche les toasts
+              throw new ValidationError(
+                'Erreur de validation',
+                normalizedViolations,
+                response.status
+              );
+            }
           }
+
+          // Si pas de violations, utiliser le message d'erreur standard
+          errorMessage = error['hydra:description'] || error['hydra:title'] || error.message || errorMessage;
 
           // Améliorer les messages d'erreur spécifiques
           if (response.status === 403 && errorMessage.includes('Access Denied')) {
             errorMessage = 'Accès refusé. Veuillez vérifier votre email pour activer votre compte.';
           }
         } catch (parseError) {
-          // Si pas de JSON, utiliser le status text
-          if (!silent) {
-            console.error('❌ Impossible de parser la réponse JSON:', parseError);
+          // Si c'est une ValidationError, la relancer
+          if (parseError instanceof ValidationError) {
+            throw parseError;
           }
-          errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+
+          // Détecter si le backend a renvoyé du HTML au lieu du JSON
+          if (parseError instanceof Error &&
+              (parseError.message.includes('Unexpected token') ||
+               parseError.message.includes('is not valid JSON') ||
+               parseError.message.includes('JSON.parse'))) {
+            errorMessage = 'Erreur serveur. Le backend a renvoyé une réponse invalide. Vérifiez les logs du serveur.';
+          } else {
+            // Si pas de JSON, utiliser le status text
+            errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+          }
 
           // Messages spécifiques pour les codes HTTP communs
           if (response.status === 403) {
             errorMessage = 'Accès refusé. Veuillez vérifier votre email pour activer votre compte.';
+          } else if (response.status === 500) {
+            errorMessage = 'Erreur serveur interne. Vérifiez les logs du backend.';
           }
         }
 
-        if (!silent) {
-          console.error('❌ Message d\'erreur final:', errorMessage);
-        }
         throw new Error(errorMessage);
       }
 
       // Retourner la réponse JSON
       return response.json();
     } catch (error: unknown) {
-      // Gérer les erreurs réseau
+      // Gérer les erreurs réseau et de parsing
       if (error instanceof Error) {
+        // Détecter les erreurs de parsing JSON (quand le backend renvoie du HTML)
+        if (error.message.includes('Unexpected token') ||
+            error.message.includes('is not valid JSON') ||
+            error.message.includes('JSON.parse')) {
+          throw new Error('Le serveur a renvoyé une réponse invalide. Vérifiez que le backend fonctionne correctement.');
+        }
         throw error;
       }
       throw new Error('Erreur de connexion au serveur');
@@ -254,16 +303,10 @@ class ApiClient {
    * POST /api/rides
    */
   async createRide(data: CreateRideData): Promise<Ride> {
-    try {
-      const result = await this.request<Ride>('/api/rides', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-      return result;
-    } catch (error) {
-      console.error('❌ API createRide - Erreur:', error);
-      throw error;
-    }
+    return this.request<Ride>('/api/rides', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   /**
@@ -305,21 +348,84 @@ class ApiClient {
   }
 
   /**
+   * Récupérer les courses disponibles pour le driver (courses pending)
+   * GET /api/driver/available-rides
+   */
+  async getAvailableRides(filters?: {
+    limit?: number;
+    vehicleType?: string;
+    maxDistance?: number;
+  }): Promise<{ success: boolean; data: Ride[]; count: number }> {
+    const params = new URLSearchParams();
+
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.vehicleType) params.append('vehicleType', filters.vehicleType);
+    if (filters?.maxDistance) params.append('maxDistance', filters.maxDistance.toString());
+
+    const url = `/api/driver/available-rides${params.toString() ? `?${params.toString()}` : ''}`;
+    return this.request<{ success: boolean; data: Ride[]; count: number }>(url);
+  }
+
+  /**
+   * Récupérer les statistiques du passager connecté
+   * GET /api/passenger/stats
+   */
+  async getPassengerStats(): Promise<{
+    success: boolean;
+    passenger: {
+      id: number;
+      email: string;
+      firstName: string;
+      lastName: string;
+      rating: number;
+    };
+    stats: {
+      totalRides: number;
+      completedRides: number;
+      cancelledRides: number;
+      totalSpent: number;
+      averageRidePrice: number;
+    };
+  }> {
+    return this.request('/api/passenger/stats');
+  }
+
+  /**
+   * Récupérer l'historique des courses du passager connecté
+   * GET /api/passenger/history
+   */
+  async getPassengerHistory(filters?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    success: boolean;
+    data: any[];
+    pagination: {
+      limit: number;
+      offset: number;
+      count: number;
+    };
+  }> {
+    const params = new URLSearchParams();
+
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    if (filters?.offset) params.append('offset', filters.offset.toString());
+
+    const url = `/api/passenger/history${params.toString() ? `?${params.toString()}` : ''}`;
+    return this.request(url);
+  }
+
+  /**
    * Accepter une course (chauffeur)
    * POST /api/rides/{id}/accept
    */
   async acceptRide(rideId: number): Promise<Ride> {
-    try {
-      const result = await this.request<Ride>(`/api/rides/${rideId}/accept`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      return result;
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'acceptation de la course', rideId);
-      console.error('❌ Détails de l\'erreur:', error);
-      throw error;
-    }
+    return this.request<Ride>(`/api/rides/${rideId}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
   }
 
   /**
@@ -403,15 +509,6 @@ class ApiClient {
       // Gérer silencieusement TOUTES les erreurs de cet endpoint
       // car c'est une fonctionnalité optionnelle (suivi GPS en temps réel)
       // Si l'endpoint n'est pas implémenté côté backend, cela ne doit pas bloquer l'app
-
-      // Log en mode debug uniquement (pas d'erreur visible pour l'utilisateur)
-      if (error instanceof Error && error.message.includes('404')) {
-        // Endpoint non implémenté - silencieux total
-      } else {
-        // Autre erreur - log discret en console seulement
-        console.debug('⚠️ GPS update failed (optional feature):', error instanceof Error ? error.message : error);
-      }
-
       return null;
     }
   }
@@ -438,21 +535,13 @@ class ApiClient {
    * PATCH /api/drivers/{id}
    */
   async updateDriver(id: number, data: Partial<Driver>): Promise<Driver> {
-    try {
-      const result = await this.request<Driver>(`/api/drivers/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/merge-patch+json',
-        },
-        body: JSON.stringify(data),
-      });
-      console.log('✅ Driver mis à jour:', result);
-      return result;
-    } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour du driver:', error);
-      console.error('❌ Données envoyées:', data);
-      throw error;
-    }
+    return this.request<Driver>(`/api/drivers/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/merge-patch+json',
+      },
+      body: JSON.stringify(data),
+    });
   }
 
   // ============================================

@@ -17,10 +17,19 @@ export default function DriverRidePage() {
   const { user, isLoadingUser } = useAuth();
   const rideId = parseInt(params.id as string);
 
-  const { data: ride, isLoading: rideLoading } = useRide(rideId);
+  const { data: ride, isLoading: rideLoading, refetch } = useRide(rideId);
   const updateStatus = useUpdateRideStatus();
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  // État local optimiste pour afficher immédiatement le bon bouton
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
+
+  // ✅ Réinitialiser l'état optimiste SEULEMENT quand les vraies données correspondent
+  useEffect(() => {
+    if (optimisticStatus && ride && ride.status === optimisticStatus) {
+      setOptimisticStatus(null);
+    }
+  }, [ride?.status, optimisticStatus]);
 
   // Note: Polling géré automatiquement par React Query dans useRide
   // avec polling intelligent adapté au statut de la course (optimisation performance)
@@ -120,25 +129,28 @@ export default function DriverRidePage() {
     const confirmed = confirm(confirmMessages[newStatus] || 'Confirmer le changement de statut ?');
     if (!confirmed) return;
 
+    // ✅ Mise à jour optimiste : afficher immédiatement le nouveau statut dans l'UI
+    setOptimisticStatus(newStatus);
     setIsUpdatingStatus(true);
+
     updateStatus.mutate(
       { rideId: ride.id, status: newStatus },
       {
         onSuccess: (updatedRide) => {
-          // Note: Pas besoin de refetch() ici, React Query invalide automatiquement
-          // la query grâce à invalidateQueries dans useUpdateRideStatus
+          // NE PAS réinitialiser l'état optimiste ici !
+          // Il sera réinitialisé automatiquement par le useEffect quand ride.status sera à jour
 
           // Rediriger vers le dashboard si la course est terminée
           if (newStatus === 'completed') {
-            // Toast déjà affiché par le hook useUpdateRideStatus
             setTimeout(() => {
               router.push('/driver/dashboard');
             }, 1500);
           }
         },
         onError: (error) => {
-          console.error('❌ Erreur:', error);
           toast.error(`Impossible de mettre à jour le statut: ${error.message}`);
+          // Annuler la mise à jour optimiste en cas d'erreur
+          setOptimisticStatus(null);
         },
         onSettled: () => {
           setIsUpdatingStatus(false);
@@ -170,7 +182,10 @@ export default function DriverRidePage() {
 
   const passenger = typeof ride.passenger === 'object' ? ride.passenger as User : null;
   const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
-  const statusConfig = RIDE_STATUS[ride.status];
+
+  // Utiliser le statut optimiste si disponible, sinon le statut réel
+  const currentStatus = optimisticStatus || ride.status;
+  const statusConfig = RIDE_STATUS[currentStatus];
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
@@ -204,29 +219,45 @@ export default function DriverRidePage() {
               </div>
 
               {/* Boutons d'action selon le statut */}
-              {ride.status === 'accepted' && (
+              {/* DÉMARRER : Afficher si accepted ET pas optimiste in_progress */}
+              {currentStatus === 'accepted' && optimisticStatus !== 'in_progress' && (
                 <Button
                   onClick={() => handleUpdateStatus('in_progress')}
                   disabled={isUpdatingStatus}
                   className="w-full bg-green-600 hover:bg-green-700"
                   size="lg"
                 >
-                  {isUpdatingStatus ? '⏳ Mise à jour...' : '🚗 Démarrer la course'}
+                  {isUpdatingStatus ? '⏳ Démarrage...' : '🚗 Démarrer la course'}
                 </Button>
               )}
 
-              {ride.status === 'in_progress' && (
-                <Button
-                  onClick={() => handleUpdateStatus('completed')}
-                  disabled={isUpdatingStatus}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  size="lg"
-                >
-                  {isUpdatingStatus ? '⏳ Mise à jour...' : '🏁 Terminer la course'}
-                </Button>
+              {/* TERMINER : Afficher si in_progress OU optimiste in_progress */}
+              {(currentStatus === 'in_progress' || optimisticStatus === 'in_progress') && (
+                <div className="space-y-3">
+                  {/* Badge indicateur "Course en cours" */}
+                  <div className="p-4 bg-green-50 border-2 border-green-500 rounded-lg">
+                    <div className="flex items-center gap-2 justify-center">
+                      <span className="animate-pulse text-2xl">🚗</span>
+                      <div>
+                        <p className="font-bold text-green-800">Course en cours</p>
+                        <p className="text-sm text-green-700">Le passager est à bord</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bouton pour terminer la course */}
+                  <Button
+                    onClick={() => handleUpdateStatus('completed')}
+                    disabled={isUpdatingStatus}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    size="lg"
+                  >
+                    {isUpdatingStatus ? '⏳ Finalisation...' : '🏁 Terminer la course'}
+                  </Button>
+                </div>
               )}
 
-              {ride.status === 'completed' && (
+              {currentStatus === 'completed' && (
                 <div className="p-4 bg-green-50 border-2 border-green-300 rounded-lg text-center">
                   <p className="text-lg font-semibold text-green-800">
                     ✅ Course terminée
@@ -368,21 +399,22 @@ export default function DriverRidePage() {
           <Card className="p-6 bg-blue-50">
             <h2 className="text-lg font-bold mb-3">💡 Instructions</h2>
             <div className="space-y-2 text-sm">
-              {ride.status === 'accepted' && (
+              {currentStatus === 'accepted' && (
                 <>
                   <p>• Rendez-vous au point de départ</p>
                   <p>• Contactez le passager si nécessaire</p>
                   <p>• Cliquez sur "Démarrer la course" quand le passager est monté</p>
                 </>
               )}
-              {ride.status === 'in_progress' && (
+              {currentStatus === 'in_progress' && (
                 <>
                   <p>• Suivez l'itinéraire vers la destination</p>
                   <p>• Conduisez prudemment</p>
-                  <p>• Cliquez sur "Terminer la course" à l'arrivée</p>
+                  <p>• Le bouton "Terminer" est disponible à tout moment</p>
+                  <p>• Cliquez sur "Terminer la course" quand vous arrivez</p>
                 </>
               )}
-              {ride.status === 'completed' && (
+              {currentStatus === 'completed' && (
                 <>
                   <p>• Course terminée avec succès</p>
                   <p>• Le passager va vous noter</p>

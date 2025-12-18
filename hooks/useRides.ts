@@ -53,32 +53,9 @@ export function useRide(rideId: number) {
     queryKey: ['rides', rideId],
     queryFn: () => api.getRide(rideId),
     enabled: !!rideId,
-    // Polling intelligent : adapte la fréquence selon le statut et la visibilité de la page
-    refetchInterval: (query) => {
-      // Arrêter le polling si l'onglet n'est pas visible (économie de ressources)
-      if (typeof document !== 'undefined' && document.hidden) {
-        return false;
-      }
-
-      const ride = query.state.data as Ride | undefined;
-
-      // Arrêter le polling si la course est terminée ou annulée
-      if (ride && (ride.status === 'completed' || ride.status === 'cancelled')) {
-        return false;
-      }
-
-      // Polling rapide pour les courses actives
-      if (ride && (ride.status === 'in_progress' || ride.status === 'accepted')) {
-        return 3000; // 3 secondes pour les courses actives
-      }
-
-      // Polling plus lent pour les courses en attente
-      return 8000; // 8 secondes pour pending
-    },
-    staleTime: 2000, // Les données sont fraîches pendant 2s
-    gcTime: 10000, // Garder en cache pendant 10s
-    refetchOnWindowFocus: true, // Rafraîchir quand l'utilisateur revient sur l'onglet
-    retry: 2, // Réessayer 2 fois en cas d'échec
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
   });
 }
 
@@ -170,5 +147,60 @@ export function useDriverHistory(filters?: {
   return useQuery({
     queryKey: ['driver-history', filters],
     queryFn: () => api.getDriverHistory(filters),
+  });
+}
+
+/**
+ * Hook pour récupérer les courses disponibles pour le driver (courses pending)
+ * Utilise l'endpoint /api/driver/available-rides
+ * Avec polling intelligent pour le dashboard driver
+ */
+export function useAvailableRides(filters?: {
+  limit?: number;
+  vehicleType?: string;
+  maxDistance?: number;
+}) {
+  return useQuery({
+    queryKey: ['available-rides', filters],
+    queryFn: () => api.getAvailableRides(filters),
+    // Polling intelligent : arrêter si l'onglet n'est pas visible
+    refetchInterval: () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return false; // Arrêter le polling si l'onglet est caché
+      }
+      return 8000; // Rafraîchir toutes les 8 secondes
+    },
+    staleTime: 5000, // Les données sont fraîches pendant 5s
+    retry: 2, // Réessayer 2 fois en cas d'échec
+  });
+}
+
+/**
+ * Hook pour récupérer les statistiques du passager connecté
+ * Utilise l'endpoint /api/passenger/stats
+ */
+export function usePassengerStats() {
+  return useQuery({
+    queryKey: ['passenger-stats'],
+    queryFn: () => api.getPassengerStats(),
+    staleTime: 30000, // Les stats sont fraîches pendant 30s
+    retry: 2,
+  });
+}
+
+/**
+ * Hook pour récupérer l'historique des courses du passager connecté
+ * Utilise l'endpoint /api/passenger/history
+ */
+export function usePassengerHistory(filters?: {
+  status?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  return useQuery({
+    queryKey: ['passenger-history', filters],
+    queryFn: () => api.getPassengerHistory(filters),
+    staleTime: 10000, // Les données sont fraîches pendant 10s
+    retry: 2,
   });
 }

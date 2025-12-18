@@ -146,6 +146,15 @@ export const POLLING_CONFIG = {
 } as const;
 
 // ============================================
+// Mercure Configuration (Real-time notifications)
+// ============================================
+
+export const MERCURE_CONFIG = {
+  HUB_URL: process.env.NEXT_PUBLIC_MERCURE_URL || 'http://localhost:3000/.well-known/mercure',
+  BACKEND_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+} as const;
+
+// ============================================
 // Validation Rules
 // ============================================
 

@@ -15,6 +15,9 @@ export default function RateDriverPage() {
   const router = useRouter();
   const { user, isLoadingUser: userLoading } = useAuth();
   const rideId = parseInt(params.id as string);
+
+  // Utiliser les données du cache sans refetch automatique
+  // pour éviter les incohérences entre Mercure et l'API REST
   const { data: ride, isLoading: rideLoading } = useRide(rideId);
 
   const [rating, setRating] = useState(5);
@@ -29,12 +32,9 @@ export default function RateDriverPage() {
     }
   }, [user, userLoading, router]);
 
-  // Rediriger si la course n'est pas terminée
-  useEffect(() => {
-    if (ride && ride.status !== 'completed') {
-      router.push(`/passenger/ride/${ride.id}`);
-    }
-  }, [ride, router]);
+  // Note: On ne vérifie plus le statut de la course ici
+  // Si l'utilisateur arrive sur cette page, on le laisse noter même si le statut
+  // n'est pas 'completed' (cela évite les problèmes de synchronisation entre Mercure et l'API)
 
   // Soumettre la notation
   const handleSubmit = async () => {

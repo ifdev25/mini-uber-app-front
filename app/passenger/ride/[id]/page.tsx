@@ -13,16 +13,62 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useRide, useCancelRide } from '@/hooks/useRides';
+import { useMercure } from '@/hooks/useMercure';
 import { RIDE_STATUS, VEHICLE_TYPES, MAP_CONFIG } from '@/lib/constants';
-import { Driver, User } from '@/lib/types';
+import { Driver, User, Ride } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 export default function RideTrackingPage() {
   const params = useParams();
   const router = useRouter();
   const { user, isLoadingUser: userLoading } = useAuth();
   const rideId = parseInt(params.id as string);
-  const { data: ride, isLoading: rideLoading, error } = useRide(rideId);
+
+  // ✅ Chargement initial de la course via API REST
+  const { data: initialRide, isLoading: rideLoading, error, refetch } = useRide(rideId);
+
+  // ✅ Abonnement aux mises à jour temps réel via Mercure
+  const { ride: mercureRide, isConnected: mercureConnected, error: mercureError } = useMercure(rideId);
+
   const cancelRide = useCancelRide();
+
+  // État local pour la course (fusion des données API REST + Mercure)
+  const [ride, setRide] = useState<Ride | null>(null);
+
+  // Fusionner les données initiales (REST) et les mises à jour temps réel (Mercure)
+  useEffect(() => {
+    if (mercureRide && initialRide) {
+      // ✅ Fusionner les données REST et Mercure pour éviter de perdre des champs
+      const mergedRide = {
+        ...initialRide,      // Données de base de l'API REST
+        ...mercureRide,       // Mises à jour en temps réel de Mercure (écrase les champs présents)
+      };
+      setRide(mergedRide);
+    } else if (mercureRide) {
+      // ✅ Uniquement Mercure (cas rare)
+      setRide(mercureRide);
+    } else if (initialRide) {
+      // ✅ Uniquement API REST (Mercure pas encore connecté)
+      setRide(initialRide);
+    }
+  }, [mercureRide, initialRide]);
+
+  // Afficher une notification quand un chauffeur accepte la course
+  useEffect(() => {
+    if (ride && ride.status === 'accepted' && initialRide?.status === 'pending') {
+      // La course vient d'être acceptée (transition pending → accepted)
+      const driverUser = ride.driver && typeof ride.driver === 'object' && 'user' in ride.driver
+        ? (typeof ride.driver.user === 'object' ? ride.driver.user as User : null)
+        : (ride.driver as User | null);
+
+      const driverName = driverUser ? `${driverUser.firstName} ${driverUser.lastName}` : 'Un chauffeur';
+
+      toast.success(`🎉 ${driverName} a accepté votre course !`, {
+        duration: 5000,
+        icon: '🚗',
+      });
+    }
+  }, [ride?.status, initialRide?.status]);
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -30,6 +76,28 @@ export default function RideTrackingPage() {
       router.push('/login');
     }
   }, [user, userLoading, router]);
+
+  // ✅ Polling de secours si Mercure échoue (fallback)
+  // Seulement si Mercure n'est PAS connecté
+  useEffect(() => {
+    if (!ride || ride.status === 'completed' || ride.status === 'cancelled') {
+      return;
+    }
+
+    // Si Mercure est connecté, pas besoin de polling
+    if (mercureConnected) {
+      console.log('✅ [Polling] Désactivé - Mercure est connecté');
+      return;
+    }
+
+    // Mercure non connecté → activer le polling de secours
+    console.log('⚠️ [Polling] Activé - Mercure non disponible');
+    const interval = setInterval(() => {
+      refetch();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [ride, refetch, mercureConnected]);
 
   // Annuler la course
   const handleCancelRide = () => {
@@ -108,12 +176,6 @@ export default function RideTrackingPage() {
       popup: `Chauffeur: ${driverUser?.firstName || 'Chauffeur'}`,
       icon: 'driver' as const,
     });
-  } else {
-    console.warn('⚠️ Marqueur chauffeur NON ajouté:', {
-      hasDriver: !!driver,
-      status: ride.status,
-      reason: !driver ? 'Pas de driver' : `Status incompatible: ${ride.status}`,
-    });
   }
 
 
@@ -144,12 +206,15 @@ export default function RideTrackingPage() {
       (ride.pickupLatitude + ride.dropoffLatitude) / 2,
       (ride.pickupLongitude + ride.dropoffLongitude) / 2,
     ];
-  } else {
-    console.warn('⚠️ Coordonnées invalides, utilisation du centre par défaut:', defaultCenter);
   }
 
-  const statusConfig = RIDE_STATUS[ride.status];
-  const vehicleConfig = VEHICLE_TYPES[ride.vehicleType];
+  const statusConfig = RIDE_STATUS[ride.status] || {
+    label: 'Statut inconnu',
+    icon: '❓',
+    description: 'Statut non reconnu',
+    color: 'gray'
+  };
+  const vehicleConfig = VEHICLE_TYPES[ride.vehicleType] || VEHICLE_TYPES.standard;
 
   return (
     <div className="container mx-auto p-4 max-w-7xl">
@@ -160,6 +225,19 @@ export default function RideTrackingPage() {
           <p className="text-gray-600 mt-2">
             {statusConfig.icon} {statusConfig.label} - {statusConfig.description}
           </p>
+          {/* Indicateur de connexion Mercure */}
+          {mercureConnected && (
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+              <span className="animate-pulse">⚡</span>
+              <span>Notifications instantanées actives</span>
+            </div>
+          )}
+          {mercureError && !mercureConnected && (
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm">
+              <span>⚠️</span>
+              <span>Mode polling activé (3s)</span>
+            </div>
+          )}
         </div>
         <Button variant="outline" onClick={() => router.push('/passenger/history')}>
           ← Retour
@@ -267,11 +345,15 @@ export default function RideTrackingPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Distance estimée</p>
-                <p className="font-medium">{ride.estimatedDistance.toFixed(1)} km</p>
+                <p className="font-medium">
+                  {ride.estimatedDistance ? ride.estimatedDistance.toFixed(1) : 'N/A'} km
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Durée estimée</p>
-                <p className="font-medium">{ride.estimatedDuration} min</p>
+                <p className="font-medium">
+                  {ride.estimatedDuration || 'N/A'} min
+                </p>
               </div>
             </div>
           </Card>
@@ -280,9 +362,13 @@ export default function RideTrackingPage() {
           <Card className="p-4 bg-blue-50 border-blue-200">
             <h2 className="font-semibold mb-2">Prix</h2>
             <p className="text-2xl font-bold text-blue-600">
-              {ride.finalPrice ? ride.finalPrice.toFixed(2) : ride.estimatedPrice.toFixed(2)} €
+              {ride.finalPrice
+                ? (typeof ride.finalPrice === 'number' ? ride.finalPrice.toFixed(2) : ride.finalPrice)
+                : ride.estimatedPrice
+                  ? (typeof ride.estimatedPrice === 'number' ? ride.estimatedPrice.toFixed(2) : ride.estimatedPrice)
+                  : 'N/A'} €
             </p>
-            {!ride.finalPrice && (
+            {!ride.finalPrice && ride.estimatedPrice && (
               <p className="text-xs text-gray-500 mt-1">Prix estimé</p>
             )}
           </Card>

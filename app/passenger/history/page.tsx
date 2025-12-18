@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useRides } from '@/hooks/useRides';
+import { usePassengerStats, usePassengerHistory } from '@/hooks/useRides';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
 import { Ride, RideStatus, Driver, User } from '@/lib/types';
 
@@ -14,26 +14,15 @@ export default function RideHistoryPage() {
   const { user, isLoadingUser: userLoading } = useAuth();
   const [statusFilter, setStatusFilter] = useState<RideStatus | 'all'>('all');
 
-  // Construire les filtres pour l'API (SANS le status pour garder les stats constantes)
-  const filters: Record<string, any> = {};
+  // Nouveaux endpoints dédiés passager
+  const { data: statsData, isLoading: statsLoading } = usePassengerStats();
+  const { data: historyData, isLoading: historyLoading } = usePassengerHistory();
 
-  // IMPORTANT: Filtrer par l'utilisateur connecté (passager)
-  // Format API Platform: passenger={id}
-  if (user?.id) {
-    filters.passenger = user.id;
-  }
-
-  // Trier par date décroissante (plus récentes en premier)
-  filters['order[createdAt]'] = 'desc';
-
-  const { data: ridesCollection, isLoading: ridesLoading } = useRides(filters);
-
-  // Support des deux formats : 'hydra:member' (JSON) et 'member' (JS parsé)
-  // Récupérer TOUTES les courses pour que les statistiques restent constantes
-  const allRides = ridesCollection?.['hydra:member'] || ridesCollection?.member || [];
+  // Extraire les données
+  const allRides = historyData?.data || [];
+  const stats = statsData?.stats;
 
   // Filtrer côté client selon le statusFilter
-  // Cela permet de garder les stats globales constantes
   const rides = statusFilter === 'all'
     ? allRides
     : allRides.filter(r => r.status === statusFilter);
@@ -45,7 +34,7 @@ export default function RideHistoryPage() {
     }
   }, [user, userLoading, router]);
 
-  if (userLoading || ridesLoading) {
+  if (userLoading || statsLoading || historyLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Chargement...</p>
@@ -70,14 +59,6 @@ export default function RideHistoryPage() {
     const statusConfig = RIDE_STATUS[ride.status] || { icon: '❓', label: 'Inconnu' };
     const vehicleConfig = VEHICLE_TYPES[ride.vehicleType] || { icon: '🚗', label: 'Standard' };
 
-    // Vérifier si les données sont complètes
-    const isDataComplete = Boolean(
-      ride.pickupAddress &&
-      ride.dropoffAddress &&
-      ride.estimatedDistance &&
-      ride.estimatedPrice
-    );
-
     // Extraction intelligente du driver (peut être User direct ou Driver avec user)
     const driver = typeof ride.driver === 'object' ? ride.driver as any : null;
     const driverUser: User | null = driver
@@ -98,7 +79,7 @@ export default function RideHistoryPage() {
               <span className="font-semibold">Course #{ride.id}</span>
             </div>
             <p className="text-sm text-gray-500">
-              {formatDate(ride.createdAt)}
+              {formatDate(ride.dates.created)}
             </p>
           </div>
           <div
@@ -117,19 +98,13 @@ export default function RideHistoryPage() {
           </div>
         </div>
 
-        {!isDataComplete && (
-          <div className="mb-3 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700">
-            ⚠️ Données incomplètes - Certaines informations ne sont pas disponibles
-          </div>
-        )}
-
         <div className="space-y-2 mb-3">
           <div className="flex items-start gap-2">
             <span className="text-green-600 mt-1">📍</span>
             <div className="flex-1">
               <p className="text-sm text-gray-500">Départ</p>
               <p className="text-sm font-medium truncate">
-                {ride.pickupAddress || <span className="text-orange-500 italic">Adresse non disponible</span>}
+                {ride.pickup.address || <span className="text-orange-500 italic">Adresse non disponible</span>}
               </p>
             </div>
           </div>
@@ -138,7 +113,7 @@ export default function RideHistoryPage() {
             <div className="flex-1">
               <p className="text-sm text-gray-500">Arrivée</p>
               <p className="text-sm font-medium truncate">
-                {ride.dropoffAddress || <span className="text-orange-500 italic">Adresse non disponible</span>}
+                {ride.dropoff.address || <span className="text-orange-500 italic">Adresse non disponible</span>}
               </p>
             </div>
           </div>
@@ -148,17 +123,17 @@ export default function RideHistoryPage() {
           <div className="flex items-center gap-3 text-sm text-gray-600">
             <span>{vehicleConfig?.icon} {vehicleConfig?.label}</span>
             <span>
-              {ride.estimatedDistance ? `📏 ${ride.estimatedDistance.toFixed(1)} km` : <span className="text-orange-500">📏 N/A</span>}
+              {ride.distance ? `📏 ${ride.distance.toFixed(1)} km` : <span className="text-orange-500">📏 N/A</span>}
             </span>
             <span>
-              {ride.estimatedDuration ? `⏱️ ${ride.estimatedDuration} min` : <span className="text-orange-500">⏱️ N/A</span>}
+              {ride.duration ? `⏱️ ${ride.duration} min` : <span className="text-orange-500">⏱️ N/A</span>}
             </span>
           </div>
-          <div className={`text-lg font-bold ${ride.finalPrice || ride.estimatedPrice ? 'text-blue-600' : 'text-orange-500'}`}>
-            {ride.finalPrice
-              ? `${ride.finalPrice.toFixed(2)} €`
-              : ride.estimatedPrice
-              ? `${ride.estimatedPrice.toFixed(2)} €`
+          <div className={`text-lg font-bold ${ride.price.final || ride.price.estimated ? 'text-blue-600' : 'text-orange-500'}`}>
+            {ride.price.estimated
+              ? `${ride.price.estimated.toFixed(2)} €`
+              : ride.price.estimated
+              ? `${ride.price.estimated.toFixed(2)} €`
               : 'Prix N/A'
             }
           </div>
@@ -168,13 +143,15 @@ export default function RideHistoryPage() {
           <div className="mt-3 pt-3 border-t text-sm">
             <span className="text-gray-500">Chauffeur: </span>
             <span className="font-medium">
-              {driverUser.firstName} {driverUser.lastName}
+              {driverUser.name}
             </span>
             {driverUser.rating && (
               <span className="ml-2">⭐ {driverUser.rating.toFixed(1)}</span>
             )}
           </div>
         )}
+
+        
       </Card>
     );
   };
@@ -194,26 +171,22 @@ export default function RideHistoryPage() {
         </Button>
       </div>
 
-      {/* Statistiques globales - Basées sur TOUTES les courses */}
+      {/* Statistiques globales - Depuis l'API /api/passenger/stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses totales</p>
-          <p className="text-3xl font-bold text-blue-600">{allRides.length}</p>
+          <p className="text-3xl font-bold text-blue-600">{stats?.totalRides || 0}</p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Courses terminées</p>
           <p className="text-3xl font-bold text-green-600">
-            {allRides.filter((r) => r.status === 'completed').length}
+            {stats?.completedRides || 0}
           </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-gray-600 mb-1">Total dépensé</p>
           <p className="text-3xl font-bold text-blue-600">
-            {allRides
-              .filter((r) => r.finalPrice)
-              .reduce((sum, r) => sum + (r.finalPrice || 0), 0)
-              .toFixed(2)}{' '}
-            €
+            {(stats?.totalSpent || 0).toFixed(2)} €
           </p>
         </Card>
         <Card className="p-4">
@@ -231,20 +204,6 @@ export default function RideHistoryPage() {
             onClick={() => setStatusFilter('all')}
           >
             Toutes
-          </Button>
-          <Button
-            variant={statusFilter === 'pending' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter('pending')}
-          >
-            {RIDE_STATUS.pending.icon} En attente
-          </Button>
-          <Button
-            variant={statusFilter === 'accepted' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter('accepted')}
-          >
-            {RIDE_STATUS.accepted.icon} Acceptées
           </Button>
           <Button
             variant={statusFilter === 'in_progress' ? 'default' : 'outline'}

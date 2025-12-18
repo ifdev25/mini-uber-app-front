@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
-import { useRides, useAcceptRide } from '@/hooks/useRides';
+import { useRides, useAcceptRide, useAvailableRides, useDriverHistory } from '@/hooks/useRides';
 import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 import { RIDE_STATUS, VEHICLE_TYPES } from '@/lib/constants';
 import { Ride } from '@/lib/types';
@@ -20,13 +20,22 @@ export default function DriverDashboardPage() {
   const [gpsStatus, setGpsStatus] = useState<'inactive' | 'active' | 'error' | 'not_implemented'>('inactive');
 
   // Hooks pour gérer les courses et la disponibilité
-  const { data: ridesData, isLoading: ridesLoading, refetch } = useRides();
+  // Nouveau endpoint: récupère TOUTES les courses pending disponibles
+  const { data: availableRidesData, isLoading: availableRidesLoading, refetch: refetchAvailable } = useAvailableRides({
+    vehicleType: user?.driverProfile?.vehicleType, // Filtrer par type de véhicule
+  });
+  // Ancien endpoint: récupère les courses du driver (pour trouver la course active)
+  const { data: myRidesData, isLoading: myRidesLoading } = useRides();
+  // Historique complet du driver (pour les statistiques du jour)
+  const { data: historyData, isLoading: historyLoading } = useDriverHistory({
+    status: 'completed', // Uniquement les courses terminées
+  });
   const acceptRide = useAcceptRide();
   const availabilityMutation = useDriverAvailability();
 
-  // Note: Polling géré automatiquement par React Query dans le hook useRides
+  // Note: Polling géré automatiquement par React Query dans les hooks
   // Pas besoin de polling manuel ici (optimisation performance)
-  // refetch() est disponible pour le bouton "Actualiser" manuel
+  // refetchAvailable() est disponible pour le bouton "Actualiser" manuel
 
   // Rediriger si non connecté ou pas un chauffeur
   useEffect(() => {
@@ -82,22 +91,33 @@ export default function DriverDashboardPage() {
         const result = await api.updateDriverLocation(latitude, longitude);
 
         if (result) {
+          // Position mise à jour avec succès
         } else {
-          // Endpoint non implémenté dans le backend (404)
+          // Endpoint non implémenté dans le backend (404) - non bloquant
           setGpsStatus('not_implemented');
         }
       } catch (error) {
-        console.error('❌ Erreur lors de la mise à jour de la position:', error);
+        // Erreur silencieuse - la géolocalisation est optionnelle
         setGpsStatus('error');
       }
     };
 
-    // Fonction de gestion d'erreur
+    // Fonction de gestion d'erreur - Non bloquante
     const handleError = (error: GeolocationPositionError) => {
-      console.error('❌ Erreur de géolocalisation:', error.message);
-      setGpsStatus('error');
+      // Gérer les différents types d'erreurs de manière non-blocante
       if (error.code === error.PERMISSION_DENIED) {
-        alert('Veuillez autoriser la géolocalisation pour que les passagers puissent vous localiser.');
+        // Erreur importante: permission refusée
+        setGpsStatus('error');
+        toast.error('⚠️ Veuillez autoriser la géolocalisation pour que les passagers puissent vous localiser.', {
+          duration: 5000,
+        });
+      } else if (error.code === error.TIMEOUT) {
+        // Timeout: gérer silencieusement sans bloquer l'app
+        // Ne pas changer le statut GPS, simplement ignorer ce timeout
+        // Le prochain appel pourrait réussir
+      } else if (error.code === error.POSITION_UNAVAILABLE) {
+        // Position indisponible: gérer silencieusement
+        setGpsStatus('error');
       }
     };
 
@@ -109,14 +129,16 @@ export default function DriverDashboardPage() {
         handleError,
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+          timeout: 30000, // Augmenté à 30s pour éviter les timeouts fréquents
+          maximumAge: 5000, // Accepter une position de moins de 5s
         }
       );
     } else {
-      console.error('❌ La géolocalisation n\'est pas supportée par ce navigateur');
+      // Navigateur non supporté: afficher un message unique
       setGpsStatus('error');
-      alert('Votre navigateur ne supporte pas la géolocalisation');
+      toast.error('⚠️ Votre navigateur ne supporte pas la géolocalisation', {
+        duration: 5000,
+      });
     }
 
     // Nettoyage : arrêter le suivi quand le composant est démonté ou quand le driver devient indisponible
@@ -128,25 +150,27 @@ export default function DriverDashboardPage() {
     };
   }, [isAvailable, user?.driverProfile]);
 
-  // Récupérer toutes les courses
-  const allRides = ridesData?.['hydra:member'] || ridesData?.member || [];
+  // Courses pending disponibles (nouveau endpoint - déjà filtrées par le backend)
+  // Normaliser le format des données car le nouvel endpoint utilise des noms de champs différents
+  const pendingRides = (availableRidesData?.data || []).map((ride: any) => ({
+    ...ride,
+    // Convertir le nouveau format vers l'ancien format pour compatibilité
+    pickupAddress: ride.pickup?.address || ride.pickupAddress,
+    dropoffAddress: ride.dropoff?.address || ride.dropoffAddress,
+    pickupLatitude: ride.pickup?.latitude || ride.pickupLatitude,
+    pickupLongitude: ride.pickup?.longitude || ride.pickupLongitude,
+    dropoffLatitude: ride.dropoff?.latitude || ride.dropoffLatitude,
+    dropoffLongitude: ride.dropoff?.longitude || ride.dropoffLongitude,
+    estimatedDistance: ride.distance || ride.estimatedDistance,
+    estimatedDuration: ride.duration || ride.estimatedDuration,
+    estimatedPrice: ride.price?.estimated || ride.estimatedPrice,
+  }));
 
-  // Filtrer les courses en attente (pending) ET compatibles avec le type de véhicule du driver
-  const pendingRides = allRides.filter((ride: Ride) => {
-    // Filtrer uniquement les courses pending
-    if (ride.status !== 'pending') return false;
-
-    // Si le driver a un profil, filtrer par type de véhicule
-    if (user?.driverProfile) {
-      return ride.vehicleType === user.driverProfile.vehicleType;
-    }
-
-    // Si pas de profil driver, montrer toutes les courses pending
-    return true;
-  });
+  // Récupérer les courses du driver pour trouver la course active
+  const myRides = myRidesData?.['hydra:member'] || myRidesData?.member || [];
 
   // Trouver la course active du chauffeur (accepted ou in_progress)
-  const activeRide = allRides.find(
+  const activeRide = myRides.find(
     (ride: Ride) => {
       if (ride.status !== 'accepted' && ride.status !== 'in_progress') return false;
       if (typeof ride.driver !== 'object' || !ride.driver) return false;
@@ -159,6 +183,9 @@ export default function DriverDashboardPage() {
       return false;
     }
   );
+
+  // Toutes les courses (pour les stats)
+  const allRides = [...pendingRides, ...myRides];
 
   // Gérer le toggle de disponibilité (optimisé avec useCallback)
   const handleToggleAvailability = useCallback(async () => {
@@ -261,7 +288,7 @@ export default function DriverDashboardPage() {
     }
   }, [acceptingRideId, activeRide, user, acceptRide, router]);
 
-  if (isLoadingUser || ridesLoading) {
+  if (isLoadingUser || availableRidesLoading || myRidesLoading || historyLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Chargement...</p>
@@ -269,12 +296,28 @@ export default function DriverDashboardPage() {
     );
   }
 
-  // Statistiques du jour (à implémenter avec de vraies données)
+  // Statistiques du jour
+  // Utiliser l'historique du driver (courses completed)
+  const completedRides = historyData?.data || [];
+
+  // Pour l'instant, afficher TOUTES les courses terminées (pas seulement aujourd'hui)
+  // pour vérifier que les données arrivent correctement
   const todayStats = {
-    totalRides: allRides.filter((r: Ride) => r.status === 'completed').length,
-    earnings: allRides
-      .filter((r: Ride) => r.status === 'completed')
-      .reduce((sum: number, r: Ride) => sum + (r.finalPrice || r.estimatedPrice), 0),
+    totalRides: completedRides.length,
+    earnings: completedRides.length > 0
+      ? completedRides.reduce((sum: number, ride: any) => {
+          // Le prix est un objet {estimated: X, final: Y}
+          // On utilise le prix final si disponible, sinon l'estimé
+          const price = parseFloat(
+            ride.price?.final ||
+            ride.price?.estimated ||
+            ride.finalPrice ||
+            ride.estimatedPrice ||
+            0
+          );
+          return sum + (isNaN(price) ? 0 : price);
+        }, 0)
+      : 0, // Valeur par défaut si aucune course
   };
 
   return (
@@ -427,7 +470,7 @@ export default function DriverDashboardPage() {
               <h2 className="text-xl font-bold">
                 ⏳ Courses en attente ({pendingRides.length})
               </h2>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <Button variant="outline" size="sm" onClick={() => refetchAvailable()}>
                 🔄 Actualiser
               </Button>
             </div>
@@ -537,7 +580,7 @@ export default function DriverDashboardPage() {
                 <div>
                   <p className="text-sm text-gray-600">Gains</p>
                   <p className="text-3xl font-bold text-green-600">
-                    {todayStats.earnings.toFixed(2)} €
+                    {(todayStats.earnings || 0).toFixed(2)} €
                   </p>
                 </div>
               </div>

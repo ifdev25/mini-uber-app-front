@@ -5,9 +5,11 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import toast from 'react-hot-toast';
+import { api, ValidationError } from '@/lib/api';
 import { User, RegisterData, RegisterResponse } from '@/lib/types';
 import { ROUTES, STORAGE_KEYS } from '@/lib/constants';
+import { formatValidationErrors, getContextError } from '@/lib/errorMessages';
 
 export function useAuth() {
   const router = useRouter();
@@ -70,14 +72,40 @@ export function useAuth() {
           router.push(ROUTES.HOME);
         }
       } catch (error) {
-        console.error('❌ Erreur lors de la récupération du profil:', error);
         // Si on ne peut pas récupérer le profil, nettoyer le token
         api.clearToken();
         throw error;
       }
     },
     onError: (error) => {
-      console.error('❌ Erreur de connexion:', error);
+      // Gérer les erreurs de validation avec un toast formaté
+      if (error instanceof ValidationError) {
+        const formattedMessage = formatValidationErrors(error.violations);
+
+        toast.error(formattedMessage, {
+          duration: 6000,
+          style: {
+            whiteSpace: 'pre-line',
+            maxWidth: '500px',
+          },
+        });
+      } else {
+        // Afficher un toast pour les autres erreurs
+        let message = error.message || 'Une erreur est survenue';
+
+        // Messages plus clairs pour les erreurs courantes
+        if (message.includes('401') || message.toLowerCase().includes('invalid') || message.toLowerCase().includes('credentials')) {
+          message = getContextError('auth', 'invalidCredentials');
+        } else if (message.toLowerCase().includes('access denied') || message.toLowerCase().includes('vérifier votre email')) {
+          message = getContextError('auth', 'accountNotVerified');
+        } else if (message.toLowerCase().includes('connexion') || message.toLowerCase().includes('serveur')) {
+          message = getContextError('network', 'serverUnreachable');
+        } else if (message.includes('500')) {
+          message = getContextError('server', 'internalError');
+        }
+
+        toast.error(message);
+      }
     },
   });
 
@@ -98,8 +126,39 @@ export function useAuth() {
         localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(response.user));
       }
 
+      // Afficher un toast de succès
+      toast.success('Inscription réussie ! Vérifiez votre email pour activer votre compte.');
+
       // La réponse contient le user avec isVerified: false
       // On ne redirige plus automatiquement pour permettre d'afficher le message de succès
+    },
+    onError: (error) => {
+      // Gérer les erreurs de validation avec un toast formaté
+      if (error instanceof ValidationError) {
+        const formattedMessage = formatValidationErrors(error.violations);
+
+        toast.error(formattedMessage, {
+          duration: 6000,
+          style: {
+            whiteSpace: 'pre-line',
+            maxWidth: '500px',
+          },
+        });
+      } else {
+        // Afficher un toast pour les autres erreurs
+        let message = error.message || 'Une erreur est survenue';
+
+        // Messages plus clairs pour les erreurs courantes
+        if (message.toLowerCase().includes('existe déjà') || message.toLowerCase().includes('already exists')) {
+          message = 'Un compte avec cet email existe déjà. Essayez de vous connecter.';
+        } else if (message.toLowerCase().includes('connexion')) {
+          message = getContextError('network', 'serverUnreachable');
+        } else if (message.includes('500')) {
+          message = getContextError('server', 'internalError');
+        }
+
+        toast.error(message);
+      }
     },
   });
 

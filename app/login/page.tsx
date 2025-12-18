@@ -12,7 +12,7 @@ import { ROUTES } from '@/lib/constants';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, isLoggingIn, loginError } = useAuth();
+  const { login, isLoggingIn } = useAuth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,31 +30,6 @@ export default function LoginPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            {loginError && (
-              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                <p className="font-semibold mb-1">
-                  ❌ {loginError instanceof Error ? loginError.message : 'Erreur de connexion'}
-                </p>
-                {loginError instanceof Error && (
-                  <>
-                    {loginError.message.toLowerCase().includes('connexion') && (
-                      <p className="text-xs mt-2">
-                        💡 Assurez-vous que le backend API est démarré sur http://localhost:8000
-                      </p>
-                    )}
-                    {(loginError.message.toLowerCase().includes('401') ||
-                      loginError.message.toLowerCase().includes('invalid') ||
-                      loginError.message.toLowerCase().includes('incorrect') ||
-                      loginError.message.toLowerCase().includes('credentials')) && (
-                      <p className="text-xs mt-2">
-                        💡 Email ou mot de passe incorrect. Vérifiez vos identifiants et réessayez.
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

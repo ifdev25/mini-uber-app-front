@@ -95,8 +95,6 @@ export default function DriverHistoryPage() {
                 ? 'bg-red-100 text-red-800'
                 : ride.status === 'in_progress'
                 ? 'bg-blue-100 text-blue-800'
-                : ride.status === 'accepted'
-                ? 'bg-yellow-100 text-yellow-800'
                 : 'bg-gray-100 text-gray-800'
             }`}
           >
@@ -209,13 +207,6 @@ export default function DriverHistoryPage() {
             Toutes
           </Button>
           <Button
-            variant={statusFilter === 'accepted' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter('accepted')}
-          >
-            {RIDE_STATUS.accepted.icon} Acceptées
-          </Button>
-          <Button
             variant={statusFilter === 'in_progress' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setStatusFilter('in_progress')}
@@ -258,33 +249,6 @@ export default function DriverHistoryPage() {
               <RideCard key={ride.id} ride={ride} />
             ))}
           </div>
-
-          {/* Statistiques détaillées pour les courses filtrées */}
-          {statusFilter === 'completed' && completedRides.length > 0 && (
-            <Card className="p-4">
-              <h2 className="font-semibold mb-3">Statistiques des courses terminées</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">
-                    {totalEarnings.toFixed(2)} €
-                  </p>
-                  <p className="text-sm text-gray-500">Gains totaux</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-blue-600">
-                    {totalDistance.toFixed(1)} km
-                  </p>
-                  <p className="text-sm text-gray-500">Distance totale</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-purple-600">
-                    {(totalEarnings / completedRides.length).toFixed(2)} €
-                  </p>
-                  <p className="text-sm text-gray-500">Gain moyen/course</p>
-                </div>
-              </div>
-            </Card>
-          )}
         </>
       )}
     </div>

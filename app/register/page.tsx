@@ -25,18 +25,18 @@ export default function RegisterPage() {
   });
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const { register, isRegistering, registerError, registerSuccess, registerData } = useAuth();
+  const { register, isRegistering, registerSuccess } = useAuth();
 
-  // Rediriger vers la page de connexion après 5 secondes si l'inscription réussit
+  // Rediriger vers la page de connexion après 3 secondes si l'inscription réussit
   useEffect(() => {
-    if (registerSuccess && registerData) {
+    if (registerSuccess) {
       const timer = setTimeout(() => {
         router.push(ROUTES.LOGIN);
-      }, 5000);
+      }, 3000);
 
       return () => clearTimeout(timer);
     }
-  }, [registerSuccess, registerData, router]);
+  }, [registerSuccess, router]);
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -107,36 +107,6 @@ export default function RegisterPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            {registerSuccess && registerData && (
-              <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3 flex-1">
-                    <h3 className="text-sm font-medium text-green-800">
-                      ✅ Inscription réussie !
-                    </h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <p>📧 Un email de vérification a été envoyé à <strong>{formData.email}</strong>.</p>
-                      <p className="mt-1">Veuillez vérifier votre boîte mail pour activer votre compte.</p>
-                    </div>
-                    <p className="mt-3 text-xs text-green-600">
-                      Redirection vers la page de connexion dans 5 secondes...
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {registerError && !registerSuccess && (
-              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                {registerError instanceof Error ? registerError.message : 'Erreur lors de l\'inscription'}
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="firstName">Prénom</Label>

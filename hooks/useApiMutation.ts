@@ -57,8 +57,6 @@ export function useApiMutation<TData = unknown, TVariables = unknown>(
       options.onSuccessCallback?.(data, variables);
     },
     onError: (error: Error) => {
-      console.error(`❌ Erreur lors de ${options.errorContext}:`, error);
-
       // Messages d'erreur standardisés basés sur le code HTTP
       let message = error.message;
 
